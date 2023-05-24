@@ -4,12 +4,12 @@ import re
 from string import *
 import numpy as np
 
+from simple.config import Config
+
+config = Config()
+main_lognormal_path = config.lognormal_galaxies_path
+
 # read parameters from .ini file
-
-main_lognormal_path = "/u/majaln/intensity-mapping/code/mock/lognormal_galaxies/"
-# main_lognormal_path = "~/Desktop/playground/lognormal_galaxies/"
-
-
 def read_params(ini_fname):
     ini_file = open(ini_fname, "r")
     ofile_prefix = re.split("\.", ini_fname)[-2]

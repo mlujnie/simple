@@ -14,7 +14,6 @@ import numpy as np
 import pmesh
 import psutil
 import random
-from yaml import load, dump
 
 import treecorr
 from astropy.cosmology import Cosmology, z_at_value, FlatwCDM, FlatLambdaCDM
@@ -35,20 +34,15 @@ from nbodykit.lab import cosmology as nb_cosmology
 from nbodykit.source.catalog import HDFCatalog
 from nbodykit.source.mesh.catalog import get_compensation
 
-from run_module import *
-from lognormal_im_module import (
+from simple.run_module import *
+from simple.lognormal_im_module import (
     transform_bin_to_h5,
     getindep,
     get_kspec,
     bin_scipy,
     jinc,
+    yaml_file_to_dictionary,
 )
-
-
-def get_memory_usage():
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1073741824  # in GB
-
 
 def make_map(m, Nmesh, BoxSize, type="real"):
     """
@@ -168,20 +162,6 @@ def angular_tophat_filter(k, v):
     k_perp = np.sqrt(newk[perp_axes[0]] ** 2 + newk[perp_axes[1]] ** 2)
     w = jinc(k_perp * rper) * 2
     return w * v
-
-
-def yaml_file_to_dictionary(filename):
-    with open(filename, "r") as stream:
-        data = yaml_stream_to_dictionary(stream)
-    return data
-
-
-def yaml_stream_to_dictionary(stream):
-    try:
-        from yaml import CLoader as Loader, CDumper as Dumper
-    except ImportError:
-        from yaml import Loader, Dumper
-    return load(stream, Loader=Loader)
 
 
 class LognormalIntensityMock:

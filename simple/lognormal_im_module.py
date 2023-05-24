@@ -4,9 +4,25 @@ import h5py
 import psutil
 import os
 import logging
+from yaml import load
 from scipy.stats import binned_statistic_2d, binned_statistic
 from scipy.special import legendre, j1
 
+def get_memory_usage():
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1073741824  # in GB
+
+def yaml_file_to_dictionary(filename):
+    with open(filename, "r") as stream:
+        data = yaml_stream_to_dictionary(stream)
+    return data
+
+def yaml_stream_to_dictionary(stream):
+    try:
+        from yaml import CLoader as Loader, CDumper as Dumper
+    except ImportError:
+        from yaml import Loader, Dumper
+    return load(stream, Loader=Loader)
 
 def print_memory_usage():
     process = psutil.Process(os.getpid())
@@ -25,7 +41,6 @@ def transform_bin_to_h5(bin_filename, h5_filename=None):
     Lx, Ly, Lz = np.fromfile(bin_filename, dtype=np.double, count=3, offset=0)
     N_gal = np.fromfile(bin_filename, dtype=dtype_ngal,
                         count=1, offset=offset_ngal)[0]
-    print(f"{N_gal=}")
     galdata = np.fromfile(
         bin_filename, dtype=np.float32, count=6 * N_gal, offset=offset_galdata
     )
