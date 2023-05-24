@@ -308,7 +308,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         if cosmology is None:
             cosmology = input_dict["cosmology"]
         if isinstance(cosmology, str):
-            self.astropy_cosmo = eval("astropy_cosmology.{}".format(cosmology))
+            try:
+                self.astropy_cosmo = eval("astropy_cosmology.{}".format(cosmology))
+            except:
+                logging.info(f"Initiating cosmology from file {cosmology}.")
+                self.astropy_cosmo = Cosmology.read(cosmology, format="ascii.ecsv")
         elif isinstance(cosmology, dict):
             self.astropy_cosmo = FlatwCDM(**cosmology)
             print("MNU: ", self.astropy_cosmo.m_nu)

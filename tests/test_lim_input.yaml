@@ -52,7 +52,8 @@ out_dir : './tests/tmp/'
 # obs_mask : '~/intensity-mapping/data/hetdex_fall_field_mask_holes_623_0.h5'
 
 luminosity_function : '~/intensity-mapping/data/luminosity_function_example.csv'
-cosmology : 'Planck18'
+#cosmology : 'Planck18'
+cosmology : "./tests/example_cosmology.ecsv"
 input_pk_filename : "./tests/example_pk.dat"
 #    m_nu : [0., 0., 0.06] # quantity-like ['energy', 'mass'] or array-like, optional
                 # Mass of each neutrino species in [eV] (mass-energy equivalency enabled).
