@@ -6,3 +6,11 @@
     `git clone https://github.com/mlujnie/simple`
 * modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
 * type `pip install .` in the root directory of this repo.
+
+### add following information: 
+• Brief description of features
+• Usage (with examples)
+• Build and install (with examples)
+• Dependencies
+• Status of the code and how it is maintained
+• License \check

@@ -297,6 +297,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check the outcome!"""
             )
 
+        # initiate input pk filename if given, None otherwise
+        if "input_pk_filename" in input_dict.keys():
+            logging.info("Using input power spectrum.")
+            self.input_pk_filename = input_dict["input_pk_filename"]
+        else:
+            self.input_pk_filename = None
+
         # initiate cosmology
         if cosmology is None:
             cosmology = input_dict["cosmology"]
@@ -883,7 +890,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         params = {
             "ofile_prefix": self.outfile_prefix,
-            "inp_pk_fname": "",
+            "inp_pk_fname": self.input_pk_filename,
             "xi_fname": "",
             "pkg_fname": "",
             "mpkg_fname": "",
@@ -940,7 +947,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             / (1.0 + params["z"])
         )
         # if params['inp_pk_fname'] is blanck,  use Eisenstein & Hu for input pk
-        if params["inp_pk_fname"] == "":
+        if params["inp_pk_fname"] is None:
             params["inp_pk_fname"] = os.path.join(
                 params["out_dir"], "inputs", params["ofile_prefix"] + "_pk.txt"
             )

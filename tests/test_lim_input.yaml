@@ -1,0 +1,81 @@
+# general parameters
+verbose : True
+redshift : 2.224537598696936
+bias : 1.5
+box_size : 'np.array([512, 512, 512]) * u.Mpc / cosmo.h'
+# voxel_length : 'np.array([16,16,16]) * u.Mpc / cosmo.h'
+N_mesh : [16, 16, 16]
+single_redshift : False
+RSD : False
+
+# galaxy luminosity function & selection
+luminosity_unit: '1e42 * u.erg / u.s'
+Lmin : '(4e40 * u.erg / u.s)' # see figure 4 in Gronke+15
+Lmax : '(np.inf * u.erg / u.s)'
+min_flux : "~/intensity-mapping/data/validation_fluxlimits_wavedep_sensitivity.ecsv"
+# limit_ngal: '0.0006378481529983525 * 1 / u.Mpc**3 ' # to get the target number of galaxies: 2.5/IFU.
+galaxy_selection : # choose from ['all', 'detected', 'undetected']
+  intensity : 'undetected' 
+  n_gal: 'detected'
+
+# line information and smoothing
+lambda_restframe : '1215.67 * u.angstrom'
+brightness_temperature : False
+do_spectral_smooth: True
+do_spectral_tophat_smooth: False
+do_angular_smooth: False
+sigma_beam : '0 * u.arcsec'
+dlambda : '2.38 * u.angstrom'
+sigma_noise : '~/intensity-mapping/data/validation_ifu_sigma_noise.ecsv'
+footprint_radius : '9 * u.arcmin'
+
+# info on calculating the power spectrum
+run_pk :
+  intensity : True 
+  n_gal : True 
+  cross : True 
+N_mu : 1
+dk : 0.04 
+kmin : 0.04
+kmax : 1.
+
+# info on calculating the correlation functions
+run_corrfunc :
+  intensity : False
+  n_gal : False
+  cross : False
+
+seed_lognormal : 0
+outfile_prefix : 'test'
+out_dir : './tests/tmp/'
+
+# obs_mask : '~/intensity-mapping/data/hetdex_fall_field_mask_holes_623_0.h5'
+
+luminosity_function : '~/intensity-mapping/data/luminosity_function_example.csv'
+cosmology : 'Planck18'
+input_pk_filename : "./tests/example_pk.dat"
+#    m_nu : [0., 0., 0.06] # quantity-like ['energy', 'mass'] or array-like, optional
+                # Mass of each neutrino species in [eV] (mass-energy equivalency enabled).
+                # If this is a scalar Quantity, then all neutrino species are assumed to
+                # have that mass. Otherwise, the mass of each species. The actual number
+                # of neutrino species (and hence the number of elements of m_nu if it is
+                # not scalar) must be the floor of Neff. Typically this means you should
+                # provide three neutrino masses unless you are considering something like
+                #  a sterile neutrino.
+#    Tcmb0 : 2.725 # float or scalar `~astropy.units.Quantity` ['temperature'], optional
+                  # Temperature of the CMB z=0. If a float, must be in [K].
+                  # Default: 0 [K]. Setting this to zero will turn off both photons
+                  # and neutrinos (even massive ones).
+#    Om0 : 0.3 # float
+             # Omega matter: density of non-relativistic matter in units of the
+             # critical density at z=0.
+#    Ob0 : 0.05 # float or None, optional
+              # Omega baryons: density of baryonic matter in units of the critical
+              # density at z=0.  If this is set to None (the default), any
+              # computation that requires its value will raise an exception.
+#    w0 : -1  # float, optional
+            # Dark energy equation of state at all redshifts. This is
+            # pressure/density for dark energy in units where c=1. A cosmological
+            # constant has w0=-1.0.
+#    H0 : 70 # float or `~astropy.units.Quantity` ['frequency']
+           # Hubble constant at z = 0. If a float, must be in [km/sec/Mpc]
