@@ -316,6 +316,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.out_dir, "inputs", self.outfile_prefix + "_pk.txt"
             )
 
+        if "f_growth_filename" in input_dict.keys():
+            logging.info("Using input logarithmic growth rate.")
+            self.f_growth_filename = input_dict["f_growth_filename"]
+        else:
+            self.f_growth_filename = os.path.join(
+                self.out_dir, "inputs", self.outfile_prefix + "_fnu.txt"
+            )
+
         # initiate cosmology
         if cosmology is None:
             cosmology = input_dict["cosmology"]
@@ -905,7 +913,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "pkg_fname": "",
             "mpkg_fname": "",
             "cpkg_fname": "",
-            "f_fname": "",
+            "f_fname": self.f_growth_filename,
             "z": self.redshift,
             "mnu": np.sum(self.astropy_cosmo.m_nu.to(u.eV).value),
             "oc0h2": self.astropy_cosmo.Odm0 * self.astropy_cosmo.h**2,
@@ -980,10 +988,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 params["cpkg_fname"] = os.path.join(
                     params["out_dir"], "inputs", params["ofile_prefix"] + "_cpkG.dat"
                 )
-        if params["f_fname"] == "":
-            params["f_fname"] = os.path.join(
-                params["out_dir"], "inputs", params["ofile_prefix"] + "_fnu.txt"
-            )
+        #if params["f_fname"] == "":
+        #    params["f_fname"] = os.path.join(
+        #        params["out_dir"], "inputs", params["ofile_prefix"] + "_fnu.txt"
+        #    )
 
         print(params)
 

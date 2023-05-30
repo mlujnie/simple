@@ -68,9 +68,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
         self.do_model_shot_noise = do_model_shot_noise
         logging.info("Initializing Power_Spectrum_Model instance.")
-
-        if self.input_pk_filename is None:
-            self.input_pk_filename = os.path.join(self.out_dir, "inputs", self.outfile_prefix+"_pk.txt")
             
         if isinstance(self.input_pk_filename, str):
             plin_tab = Table.read(self.input_pk_filename, format="ascii")
@@ -82,7 +79,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 "input_pk_filename must be the string filename of a tabulated power spectrum."
             )
 
-        self.f_growth_filename = os.path.join(self.out_dir, "inputs", self.outfile_prefix+"_fnu.txt")
         if isinstance(self.f_growth_filename, str):
             fnu_tab = Table.read(self.f_growth_filename, format="ascii")
             self.f_growth = interp1d(
