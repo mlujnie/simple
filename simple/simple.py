@@ -267,6 +267,16 @@ class LognormalIntensityMock:
                             stream=sys.stdout, force=True)
         logging.info("Initializing LognormalIntensityMock instance.")
 
+        # get info on saving directories etc.
+        if "outfile_prefix" in input_dict.keys():
+            self.outfile_prefix = input_dict["outfile_prefix"]
+        else:
+            self.outfile_prefix = "example"
+        if "out_dir" in input_dict.keys():
+            self.out_dir = input_dict["out_dir"]
+        else:
+            self.out_dir = "./data"
+
         # initiate luminosity function
         if luminosity_function is None:
             luminosity_function = input_dict["luminosity_function"]
@@ -302,7 +312,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             logging.info("Using input power spectrum.")
             self.input_pk_filename = input_dict["input_pk_filename"]
         else:
-            self.input_pk_filename = None
+            self.input_pk_filename = os.path.join(
+                self.out_dir, "inputs", self.outfile_prefix + "_pk.txt"
+            )
 
         # initiate cosmology
         if cosmology is None:
@@ -497,6 +509,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.N_mu = input_dict["N_mu"]
         else:
             self.N_mu = 11
+        try:
+            self.nkbin = np.floor((self.kmax - self.kmin) / self.dk).astype(int) - 1
+        except:
+            self.nkbin = np.floor(((self.kmax.to(1/self.Mpch).value - self.kmin.to(1/self.Mpch).value)/self.dk.to(1/self.Mpch).value).astype(int) - 1)
 
         # initiate obs_mask
         if "obs_mask" in input_dict.keys():
@@ -510,16 +526,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             assert (self.obs_mask.shape == self.N_mesh).all()
         else:
             self.obs_mask = None
-
-        # get info on saving directories etc.
-        if "outfile_prefix" in input_dict.keys():
-            self.outfile_prefix = input_dict["outfile_prefix"]
-        else:
-            self.outfile_prefix = "example"
-        if "out_dir" in input_dict.keys():
-            self.out_dir = input_dict["out_dir"]
-        else:
-            self.out_dir = "./data"
 
         self.noise_mesh = None
         logging.info("Done")
@@ -624,7 +630,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                         input_dict[key][small_key] = ff[key].attrs[small_key]
 
             logging.info("Initializing LognormalIntensityMock instance.")
-            new_lim_instance = LognormalIntensityMock(
+            new_lim_instance = cls(
                 input_dict, astropy_cosmo, luminosity_function_table
             )
 
@@ -951,10 +957,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             / (1.0 + params["z"])
         )
         # if params['inp_pk_fname'] is blanck,  use Eisenstein & Hu for input pk
-        if params["inp_pk_fname"] is None:
-            params["inp_pk_fname"] = os.path.join(
-                params["out_dir"], "inputs", params["ofile_prefix"] + "_pk.txt"
-            )
+        #if params["inp_pk_fname"] is None:
+        #    params["inp_pk_fname"] = os.path.join(
+        #        params["out_dir"], "inputs", params["ofile_prefix"] + "_pk.txt"
+        #    )
         if params["xi_fname"] == "":
             params["xi_fname"] = os.path.join(
                 params["out_dir"], "inputs", params["ofile_prefix"] + "_Rh_xi.txt"
@@ -2022,7 +2028,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         except:
             kmax = self.kmax
         print(kmin, kmax, dk)
-        self.nkbin = np.floor((kmax - kmin) / dk).astype(int) - 1
 
         map_1 = None
         if tracer in ["intensity", "sky_subtracted_intensity"]:
