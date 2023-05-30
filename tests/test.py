@@ -15,6 +15,7 @@ class TestStringMethods(unittest.TestCase):
         lim = LognormalIntensityMock("./tests/test_lim_input.yaml")
         pk3d = Power_Spectrum_Model("./tests/test_lim_input.yaml", do_model_shot_noise=False)
         self.assertEqual(lim.N_mesh[0], pk3d.N_mesh[0])
+        print(pk3d.do_model_shot_noise)
 
 
 if __name__ == '__main__':

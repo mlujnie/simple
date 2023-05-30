@@ -48,7 +48,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         self.own_init(do_model_shot_noise)
                     
     @classmethod
-    def from_file_2(
+    def from_file(
         cls,
         filename,
         catalog_filename=None,
@@ -56,7 +56,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         only_meshes=["noise_mesh", "obs_mask"],
         do_model_shot_noise=None,
         ):
-        instance = cls.from_file(filename=filename,
+        instance = super().from_file(filename=filename,
         catalog_filename=catalog_filename,
         only_params=only_params,
         only_meshes=only_meshes,
@@ -214,31 +214,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Done")
 
         return kspec, muspec, indep
-
-    def bin_scipy(self, pkspec):
-        k_bins = np.linspace(self.kmin, self.kmax, self.nkbin + 1)
-        mu_bins = np.linspace(0, 1, self.N_mu + 1)
-        kspec = np.concatenate(np.concatenate(self.kspec))
-        muspec = np.concatenate(np.concatenate(self.muspec))
-        pkspec = np.concatenate(np.concatenate(pkspec))
-
-        logging.info("Calculating summary statistics.")
-        (
-            mean_k,
-            monopole,
-            quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
-        ) = bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None)
-        return (
-            mean_k,
-            monopole,
-            quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
-        )
 
     def bin_nbodykit(self, pkspec):
         logging.info("Binning using project_to_basis from nbodykit.")
@@ -668,10 +643,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     @functools.cached_property
     def weight_mesh_im(self):
         return (1 / self.mean_intensity).to(1 / self.mean_intensity)
-
-    @functools.cached_property
-    def mean_intensity(self):
-        return self.mean_intensity
 
     @functools.cached_property
     def weight_mesh_ngal(self):

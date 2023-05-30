@@ -2460,7 +2460,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.voxel_length, self.N_mesh)
             redshifts = self.redshift_mesh_axis
             mean_intensity_per_redshift = self.mean_intensity_per_redshift(
-                redshifts, tracer=tracer
+                redshifts, tracer=tracer, galaxy_selection=self.galaxy_selection[tracer]
             )  # TODO: have to include decision for all/detected/undetected
             if MASK:
                 intensity = np.concatenate(
@@ -2500,7 +2500,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             redshifts = z_at_value(
                 self.astropy_cosmo.comoving_distance, distances)
             mean_intensity_per_redshift = self.mean_intensity_per_redshift(
-                redshifts, tracer=tracer
+                redshifts, tracer=tracer, galaxy_selection=self.galaxy_selection[tracer]
             )  # TODO: have to include decision for all/detected/undetected
             if MASK:
                 downsampled_mask = self.downsample_mesh(
