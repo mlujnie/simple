@@ -12,7 +12,7 @@ RSD : False
 luminosity_unit: '1e42 * u.erg / u.s'
 Lmin : '(4e40 * u.erg / u.s)' # see figure 4 in Gronke+15
 Lmax : '(np.inf * u.erg / u.s)'
-min_flux : "~/intensity-mapping/data/validation_fluxlimits_wavedep_sensitivity.ecsv"
+min_flux : "./tests/input/validation_fluxlimits_wavedep_sensitivity.ecsv"
 # limit_ngal: '0.0006378481529983525 * 1 / u.Mpc**3 ' # to get the target number of galaxies: 2.5/IFU.
 galaxy_selection : # choose from ['all', 'detected', 'undetected']
   intensity : 'undetected' 
@@ -26,7 +26,7 @@ do_spectral_tophat_smooth: False
 do_angular_smooth: False
 sigma_beam : '0 * u.arcsec'
 dlambda : '2.38 * u.angstrom'
-sigma_noise : '~/intensity-mapping/data/validation_ifu_sigma_noise.ecsv'
+sigma_noise : './tests/input/validation_ifu_sigma_noise.ecsv'
 footprint_radius : '9 * u.arcmin'
 
 # info on calculating the power spectrum
@@ -45,10 +45,10 @@ out_dir : './tests/tmp/'
 
 # obs_mask : '~/intensity-mapping/data/hetdex_fall_field_mask_holes_623_0.h5'
 
-luminosity_function : '~/intensity-mapping/data/luminosity_function_example.csv'
+luminosity_function : './tests/input/luminosity_function_example.csv'
 #cosmology : 'Planck18'
-cosmology : "./tests/example_cosmology.ecsv"
-input_pk_filename : "./tests/example_pk.dat"
+cosmology : "./tests/input/example_cosmology.ecsv"
+input_pk_filename : "./tests/input/example_pk.dat"
 #    m_nu : [0., 0., 0.06] # quantity-like ['energy', 'mass'] or array-like, optional
                 # Mass of each neutrino species in [eV] (mass-energy equivalency enabled).
                 # If this is a scalar Quantity, then all neutrino species are assumed to
