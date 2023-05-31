@@ -6,6 +6,7 @@ import sys
 
 import astropy.constants as const
 import astropy.units as u
+import astropy.cosmology as astropy_cosmology # have to keep it to initiate cosmology in LIM.
 import dask.array as da
 import h5py
 import numpy as np

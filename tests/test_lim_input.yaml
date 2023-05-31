@@ -39,12 +39,6 @@ dk : 0.04
 kmin : 0.04
 kmax : 1.
 
-# info on calculating the correlation functions
-run_corrfunc :
-  intensity : False
-  n_gal : False
-  cross : False
-
 seed_lognormal : 0
 outfile_prefix : 'test'
 out_dir : './tests/tmp/'
