@@ -31,25 +31,8 @@ from simple.lognormal_im_module import (
     bin_scipy,
     jinc,
     yaml_file_to_dictionary,
+    make_map
 )
-
-def make_map(m, Nmesh, BoxSize, type="real"):
-    """
-    Returns a pmesh.RealField object from an array 'm' as input using the cic resampler.
-
-    Parameters
-    ----------
-    m: array
-        Numpy array to be transformed into a pmesh.RealField object.
-    Nmesh: array
-        Array with dimension (3,) with the number of cells in each dimension.
-
-    """
-    pm = pmesh.pm.ParticleMesh(
-        Nmesh, BoxSize=BoxSize, dtype="float32", resampler="cic")
-    field = pm.create(type=type)
-    field[...] = m
-    return field
 
 
 def aniso_filter(k, v):
@@ -242,6 +225,7 @@ class LognormalIntensityMock:
             except Exception as e:
                 logging.error(e)
         input_dict = self.convert_input_dictionary(input_dict)
+        self.input_dict = input_dict
 
         if "verbose" in input_dict.keys():
             if input_dict["verbose"]:
@@ -480,6 +464,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 "intensity": False,
                 "n_gal": False,
                 "cross": False,
+                "sky_subtracted_intensity": False,
+                "sky_subtracted_cross": False
             }
             pass
         if "dk" in input_dict.keys():
@@ -519,7 +505,22 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.obs_mask = None
 
         self.noise_mesh = None
+        self.prepared_skysub_intensity_mesh = None
+        self.prepared_intensity_mesh = None
+        self.prepared_n_gal_mesh = None
         logging.info("Done")
+
+    def copy_info(self):
+        """
+        Initiates a new LognormalIntensityMock instance with the same input parameters as the original one.
+        """
+        logging.info("Copying LognormalIntensityMap input information.")
+        if 'cosmology' not in self.input_dict.keys():
+            self.input_dict['cosmology'] = self.astropy_cosmo
+        if 'luminosity_function' not in self.input_dict.keys():
+            self.input_dict['luminosity_function'] = self.luminosity_function
+        
+        return LognormalIntensityMock(self.input_dict)
 
     def convert_input_dictionary(self, data):
         for key in data.keys():
@@ -607,9 +608,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     "run_pk",
                     "run_corrfunc",
                     "mean_intensity",
+                    "input_dict"
                 ]:
-                    input_dict[key] = u.Quantity(
-                        ff[key][:], unit=ff[key].attrs["unit"])
+                    try:
+                        input_dict[key] = u.Quantity(
+                            ff[key][:], unit=ff[key].attrs["unit"])
+                    except Exception as e:
+                        logging.error(f"{key}: {e}")
 
                 if key in [
                     "galaxy_selection",
@@ -685,7 +690,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         attributes = [
             attr
             for attr in dir(self)
-            if not callable(getattr(self, attr)) and not attr.startswith("_")
+            if not callable(getattr(self, attr)) and not attr.startswith("_") and not (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh'])
         ]
 
         with h5py.File(filename, "w") as ff:
@@ -1889,6 +1894,80 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             P_k_mu,
         )
 
+    def _get_prepared_intensity_mesh(self, sky_subtraction):
+        intensity_map = self.intensity_mesh
+        weights_im = self.mean_intensity  # _per_redshift_mesh
+        intensity_rfield = make_map(
+            (intensity_map / weights_im).to(1),
+            Nmesh=self.N_mesh,
+            BoxSize=self.box_size.to(self.Mpch).value,
+        )
+        # intensity_map_to_use = intensity_rfield
+        # changed this: applying cic correction also to intensity mesh.
+        intensity_map_to_use = (
+            intensity_rfield.r2c().apply(
+                self.compensation[0][1], kind=self.compensation[0][2]
+            )
+        ).c2r()
+
+        if sky_subtraction:
+            intensity_map_to_use = intensity_map_to_use - (
+                self.get_sky_background(self.footprint_radius) / weights_im
+            ).to(1)
+
+        # Add noise
+        if self.noise_mesh is not None:
+            intensity_map_to_use = intensity_map_to_use + np.array(
+                (self.noise_mesh / weights_im).to(1)
+            )
+
+        # subtract mean intensity per redshift
+        intensity_map_to_use = (
+            intensity_map_to_use
+            - np.mean(intensity_map_to_use, axis=(1, 2))[:, None, None]
+        )  # self.mean_intensity_per_redshift_mesh
+
+        # multiply by the mask
+        if self.obs_mask is not None:
+            intensity_map_to_use = intensity_map_to_use * self.obs_mask
+        
+        if sky_subtraction:
+            self.prepared_skysub_intensity_mesh = intensity_map_to_use
+        else:
+            self.prepared_intensity_mesh = intensity_map_to_use
+        return 
+    
+    def _get_prepared_n_gal_mesh(self):
+        try:
+            galaxy_map = self.n_gal_mesh
+        except AttributeError:
+            self.paint_galaxy_mesh()
+            galaxy_map = self.n_gal_mesh
+
+        mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
+            :, None, None]
+        galaxy_map = ((self.n_gal_mesh - mean_ngal_per_z) /
+                    mean_ngal_per_z).to(1)
+        galaxy_rfield = make_map(galaxy_map,
+                                Nmesh=self.N_mesh,
+                                BoxSize=self.box_size.to(self.Mpch).value,
+                                )
+        galaxy_map_to_use = galaxy_rfield
+        # changed this: always apply cic correction to galaxy mesh.
+        if True:  # tracer == "n_gal":
+            galaxy_map_to_use = (
+                galaxy_rfield.r2c().apply(
+                    self.compensation[0][1], kind=self.compensation[0][2]
+                )
+            ).c2r()
+
+        if self.obs_mask is not None:
+            galaxy_map_to_use = galaxy_map_to_use * self.obs_mask
+        
+        self.prepared_n_gal_mesh = galaxy_map_to_use
+        return 
+
+
     def Pk_2d(self, tracer="intensity", save=False):
         """
         Computes the 2d power spectrum P(k,mu) of the map
@@ -1900,94 +1979,42 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Default: 'intensity'.
         """
 
-        # check if we have an intensity mesh, otherwise generate it
-        try:
-            self.intensity_mesh
-        except AttributeError:
-            self.paint_intensity_mesh()
-        if self.sigma_noise is not None:
-            logging.info(self.noise_mesh.shape)
-            try:
-                self.noise_mesh[0]
-            except TypeError:
-                self.get_intensity_noise_cube()
-
         logging.info(f"Getting 2D power spectrum of {tracer}.")
 
         if tracer in [
             "intensity",
-            "cross",
-            "sky_subtracted_intensity",
-            "sky_subtracted_cross",
-        ]:
-            intensity_map = self.intensity_mesh
-            weights_im = self.mean_intensity  # _per_redshift_mesh
-            intensity_rfield = make_map(
-                (intensity_map / weights_im).to(1),
-                Nmesh=self.N_mesh,
-                BoxSize=self.box_size.to(self.Mpch).value,
-            )
-            # intensity_map_to_use = intensity_rfield
-            # changed this: applying cic correction also to intensity mesh.
-            intensity_map_to_use = (
-                intensity_rfield.r2c().apply(
-                    self.compensation[0][1], kind=self.compensation[0][2]
-                )
-            ).c2r()
-
-            if tracer in ["sky_subtracted_intensity", "sky_subtracted_cross"]:
-                intensity_map_to_use = intensity_map_to_use - (
-                    self.get_sky_background(self.footprint_radius) / weights_im
-                ).to(1)
-
-            # Add noise
-            if self.noise_mesh is not None:
-                intensity_map_to_use = intensity_map_to_use + np.array(
-                    (self.noise_mesh / weights_im).to(1)
-                )
-
-            # subtract mean intensity per redshift
-            intensity_map_to_use = (
-                intensity_map_to_use
-                - np.mean(intensity_map_to_use, axis=(1, 2))[:, None, None]
-            )  # self.mean_intensity_per_redshift_mesh
-
-            # multiply by the mask
-            if self.obs_mask is not None:
-                intensity_map_to_use = intensity_map_to_use * self.obs_mask
+            "cross"]:
+            if self.prepared_intensity_mesh is None: # do it like this because otherwise the save_to_file acts weird with cached_property.
+                self._get_prepared_intensity_mesh(sky_subtraction=False)
+            intensity_map_to_use = self.prepared_intensity_mesh
 
             if tracer == "intensity":
                 galaxy_map_to_use = None
+            
+            logging.info("Prepared intensity map.")
+
+        elif tracer in [
+            "sky_subtracted_intensity",
+            "sky_subtracted_cross",
+        ]:
+            if self.prepared_skysub_intensity_mesh is None:
+                self._get_prepared_intensity_mesh(sky_subtraction=True)
+            intensity_map_to_use = self.prepared_skysub_intensity_mesh
+
+            if tracer == "sky_subtracted_intensity":
+                galaxy_map_to_use = None
+            
+            logging.info("Prepared intensity map.")
 
         if tracer in ["n_gal", "cross", "sky_subtracted_cross"]:
-            try:
-                galaxy_map = self.n_gal_mesh
-            except AttributeError:
-                self.paint_galaxy_mesh()
-                galaxy_map = self.n_gal_mesh
-
-            mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
-                :, None, None]
-            galaxy_map = ((self.n_gal_mesh - mean_ngal_per_z) /
-                          mean_ngal_per_z).to(1)
-            galaxy_rfield = make_map(galaxy_map,
-                                     Nmesh=self.N_mesh,
-                                     BoxSize=self.box_size.to(self.Mpch).value,
-                                     )
-            galaxy_map_to_use = galaxy_rfield
-            # changed this: always apply cic correction to galaxy mesh.
-            if True:  # tracer == "n_gal":
-                galaxy_map_to_use = (
-                    galaxy_rfield.r2c().apply(
-                        self.compensation[0][1], kind=self.compensation[0][2]
-                    )
-                ).c2r()
-
-            if self.obs_mask is not None:
-                galaxy_map_to_use = galaxy_map_to_use * self.obs_mask
-
+            
+            if self.prepared_n_gal_mesh is None:
+                self._get_prepared_n_gal_mesh()
+            galaxy_map_to_use = self.prepared_n_gal_mesh
             if tracer == "n_gal":
                 intensity_map_to_use = None
+            
+            logging.info("Prepared galaxy map.")
 
         if tracer not in [
             "intensity",
@@ -2019,6 +2046,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             kmax = self.kmax
         print(kmin, kmax, dk)
 
+        logging.info("Prepared k values.")
+
         map_1 = None
         if tracer in ["intensity", "sky_subtracted_intensity"]:
             map_1 = intensity_map_to_use
@@ -2039,7 +2068,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             del map_1, map_2, map_1_ft, map_2_ft
             pk_unit = self.mean_intensity
 
-        print("delta_k_sq: ", np.unique(np.isfinite(delta_k_sq)))
+        logging.info("Calculated delta k squared.")
 
         self.get_kspec()
         (
@@ -2054,6 +2083,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         quadrupole = quadrupole * self.box_volume.to(self.Mpch**3).value
         if P_k_mu is not None:
             P_k_mu = P_k_mu * self.box_volume.to(self.Mpch**3).value
+
+        logging.info("Finished binning delta k squared.")
 
         if save:
             if self.RSD:
@@ -2131,28 +2162,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         if save_to_self:
             self.mesh_position = mesh_position
         return mesh_position * self.Mpch
-
-    def downsample_mesh(self, mesh, new_N_mesh=None, new_voxel_length=None):
-        """
-        Returns down-sampled version of a mesh 'mesh' with the new N_mesh 'new_N_mesh' or voxel_length 'new_voxel_length'.
-        It assumes that the input mesh has mesh number self.N_mesh and voxel length self.voxel_length.
-        """
-        logging.info("Downsampling the mesh...")
-        if (new_N_mesh is None) and (new_voxel_length is None):
-            raise ValueError(
-                "You have to provide either new_N_mesh or new_voxel_length!"
-            )
-        elif new_N_mesh is None:
-            new_N_mesh = np.ceil(
-                self.box_size / new_voxel_length).to(1).astype(int)
-        pm_down = pmesh.pm.ParticleMesh(
-            new_N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
-            dtype="float32",
-            resampler=self.resampler,
-        )
-        logging.info("Done.")
-        return pm_down.downsample(mesh, keep_mean=True)
 
     def luminosity_function_times_L(self, L):
         return self.luminosity_function(L) * L

@@ -42,15 +42,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     """
 
     def __init__(
-        self, input_dict, cosmology=None, luminosity_function=None, do_model_shot_noise=None,
+        self, input_dict, cosmology=None, luminosity_function=None, do_model_shot_noise=None, out_filename=None
     ):
         LognormalIntensityMock.__init__( self, input_dict=input_dict, cosmology=cosmology, luminosity_function=luminosity_function)
-        self.own_init(do_model_shot_noise)
+        self.own_init(do_model_shot_noise, out_filename)
                     
     @classmethod
     def from_file(
         cls,
         filename,
+        out_filename,
         catalog_filename=None,
         only_params=False,
         only_meshes=["noise_mesh", "obs_mask"],
@@ -61,13 +62,14 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         only_params=only_params,
         only_meshes=only_meshes,
             )
-        instance.own_init(do_model_shot_noise)
+        instance.own_init(do_model_shot_noise, out_filename)
         return instance
     
-    def own_init(self, do_model_shot_noise):
+    def own_init(self, do_model_shot_noise, out_filename):
 
-        self.do_model_shot_noise = do_model_shot_noise
         logging.info("Initializing Power_Spectrum_Model instance.")
+        self.do_model_shot_noise = do_model_shot_noise
+        self.out_filename = out_filename
             
         if isinstance(self.input_pk_filename, str):
             plin_tab = Table.read(self.input_pk_filename, format="ascii")
@@ -245,8 +247,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         convolve=True,
         poles=False,
         mask_window_function_2=None,
-        save=False,
-        save_filename=None,
+        save=True,
+        tracer=None,
     ):
         """
         Calculates 3D P(k) model including smoothing and convolution with the window function
@@ -348,12 +350,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             .to(Pk_unit)
             .value
         )
-        if save:
-            with h5py.File(save_filename, "w") as ff:
-                ff["model"] = model
-                ff["kspec"] = self.kspec
-                ff["muspec"] = self.muspec
-            return None, None, None, None
 
         (
             mean_k,
@@ -363,8 +359,20 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_mu_2d,
             P_k_mu,
         ) = self.bin_scipy(model.real)
-        logging.info("Done")
-        return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
+
+        if save:
+            with h5py.File(self.out_filename, "a") as ff:
+                if tracer in ff.keys():
+                    del ff[tracer]
+                    logging.info(f'Overwriting {tracer} in file {out_filename}.')
+                grp = ff.create_group(tracer)
+                ff[f"{tracer}/monopole"] = monopole
+                ff[f"{tracer}/quadrupole"] = quadrupole
+                ff[f"{tracer}/k_bins"] = mean_k
+                ff[f"{tracer}/P_shot"] = P_shot_smoothed.to(self.Mpch**3).value
+                ff[f"{tracer}/S_bar"] = (S_bar * box_volume).to(self.Mpch**3).value
+                logging.info("Done")
+                return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
 
     def model_shot_noise(self, N_real=10):
         N_gal = int((self.n_bar_gal * self.box_volume).to(1))
@@ -684,6 +692,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.weight_mesh_im * self.obs_mask, sigma_noise_im)
         observed_volume = self.get_observed_volume()
         logging.info("Calculating multipoles.")
+        if sky_subtraction:
+            tracer = "sky_subtracted_intensity"
+        else:
+            tracer = "intensity"
         (
             mean_k,
             monopole,
@@ -701,8 +713,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.Mpch**3,
             convolve=True,
             poles=True,
-            save=False,
-            save_filename="im_model.h5",
+            save=True,
+            tracer=tracer,
         )
         logging.info("Done.")
         return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
@@ -725,9 +737,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 self.model_shot_noise()
             P_shot_smoothed = self.ngal_shot_noise_model
         else:
-            S_bar_ngal = self.get_S_bar(
-                self.weight_mesh_ngal * self.obs_mask, sigma_noise_ngal)
-            P_shot_smoothed = S_bar_ngal * self.box_volume
+            #S_bar_ngal = self.get_S_bar(
+            #    self.weight_mesh_ngal * self.obs_mask, sigma_noise_ngal)
+            #P_shot_smoothed = S_bar_ngal * self.box_volume
+            P_shot_smoothed = np.mean(self.obs_mask**2 / self.mean_ngal_per_redshift_mesh).to(self.Mpch**3)
             logging.info(
                 "\n P_shot_ngal: {} \n".format(P_shot_smoothed))
         S_bar_notsmoothed = 0.0
@@ -750,8 +763,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.Mpch**3,
             convolve=True,
             poles=True,
-            save=False,
-            save_filename="n_gal_model.h5",
+            save=True,
+            tracer="n_gal",
         )
         return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
 
@@ -790,6 +803,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 1 - np.sqrt(self.D_sq_tophat_of_k(self.k_perp, self.s_perp_sky))
             )
         observed_volume = self.get_observed_volume()
+        if sky_subtraction:
+            tracer = "sky_subtracted_cross"
+        else:
+            tracer = "cross"
         logging.info("Calculating multipoles.")
         (
             mean_k,
@@ -809,8 +826,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             convolve=True,
             poles=True,
             mask_window_function_2=mask_window_function_2,
-            save=False,
-            save_filename="cross_model.h5",
+            save=True,
+            tracer=tracer,
         )
         return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
 
@@ -827,3 +844,17 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             return self.get_cross_model(sky_subtraction=True)
         else:
             raise ValueError("Tracer must be intensity, n_gal, or cross.")
+
+    def get_models(self):
+        if self.run_pk["intensity"]:
+            self.get_model(tracer="intensity")
+        if self.run_pk["n_gal"]:
+            self.get_model(tracer="n_gal")
+        if self.run_pk["cross"]:
+            self.get_model(tracer="cross")
+        if "sky_subtracted_intensity" in self.run_pk.keys():
+            if self.run_pk["sky_subtracted_intensity"]:
+                self.get_model(tracer='sky_subtracted_intensity')
+        if "sky_subtracted_cross" in self.run_pk.keys():
+            if self.run_pk["sky_subtracted_cross"]:
+                self.get_model(tracer='sky_subtracted_cross')
