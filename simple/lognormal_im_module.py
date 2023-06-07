@@ -9,14 +9,17 @@ from yaml import load
 from scipy.stats import binned_statistic_2d, binned_statistic
 from scipy.special import legendre, j1
 
+
 def get_memory_usage():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1073741824  # in GB
+
 
 def yaml_file_to_dictionary(filename):
     with open(filename, "r") as stream:
         data = yaml_stream_to_dictionary(stream)
     return data
+
 
 def yaml_stream_to_dictionary(stream):
     try:
@@ -24,6 +27,7 @@ def yaml_stream_to_dictionary(stream):
     except ImportError:
         from yaml import Loader, Dumper
     return load(stream, Loader=Loader)
+
 
 def print_memory_usage():
     process = psutil.Process(os.getpid())
@@ -89,7 +93,8 @@ def get_checker_mask(N_mesh, N_cells=1):
     obs_mask_2d = np.zeros(shape=(N_mesh[1], N_mesh[2]))
     row_2d = np.array([np.arange(N_mesh[1]) for i in range(N_mesh[2])]).T
     col_2d = np.array([np.arange(N_mesh[2]) for i in range(N_mesh[1])])
-    obs_mask_2d[((row_2d // N_cells) % 2 == 0) & ((col_2d // N_cells) % 2 == 1)] = 1.0
+    obs_mask_2d[((row_2d // N_cells) % 2 == 0) &
+                ((col_2d // N_cells) % 2 == 1)] = 1.0
     obs_mask = np.array([obs_mask_2d for i in range(N_mesh[0])])
     return obs_mask
 
@@ -183,33 +188,43 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None):
     )
 
 
+def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
+    P_k_2d, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
+        k_par, k_perp, pkspec, bins=[k_bins, k_bins], statistic="mean"
+    )
+    logging.info("Calculated P_k_2d.")
+    return P_k_2d
+
+
 def jinc(x):
     return np.where(x != 0, j1(x) / x, 0.5)
 
+
 def downsample_mesh(mesh, box_size, new_N_mesh=None, new_voxel_length=None, resampler='cic'):
-        """
-        Returns down-sampled version of a mesh 'mesh' with the new N_mesh 'new_N_mesh' or voxel_length 'new_voxel_length'.
-        It assumes that the input mesh has mesh number self.N_mesh and voxel length self.voxel_length.
-        """
-        logging.info("Downsampling the mesh...")
-        if (new_N_mesh is None) and (new_voxel_length is None):
-            raise ValueError(
-                "You have to provide either new_N_mesh or new_voxel_length!"
-            )
-        elif new_N_mesh is None:
-            new_N_mesh = np.ceil(
-                box_size / new_voxel_length).to(1).astype(int)
-            
-        if not isinstance(mesh, pmesh.pm.RealField):
-            mesh = make_map(mesh, np.shape(mesh), box_size)
-        pm_down = pmesh.pm.ParticleMesh(
-            new_N_mesh,
-            BoxSize=box_size,
-            dtype="float32",
-            resampler=resampler,
+    """
+    Returns down-sampled version of a mesh 'mesh' with the new N_mesh 'new_N_mesh' or voxel_length 'new_voxel_length'.
+    It assumes that the input mesh has mesh number self.N_mesh and voxel length self.voxel_length.
+    """
+    logging.info("Downsampling the mesh...")
+    if (new_N_mesh is None) and (new_voxel_length is None):
+        raise ValueError(
+            "You have to provide either new_N_mesh or new_voxel_length!"
         )
-        logging.info("Done.")
-        return pm_down.downsample(mesh, keep_mean=True)
+    elif new_N_mesh is None:
+        new_N_mesh = np.ceil(
+            box_size / new_voxel_length).to(1).astype(int)
+
+    if not isinstance(mesh, pmesh.pm.RealField):
+        mesh = make_map(mesh, np.shape(mesh), box_size)
+    pm_down = pmesh.pm.ParticleMesh(
+        new_N_mesh,
+        BoxSize=box_size,
+        dtype="float32",
+        resampler=resampler,
+    )
+    logging.info("Done.")
+    return pm_down.downsample(mesh, keep_mean=True)
+
 
 def make_map(m, Nmesh, BoxSize, type="real"):
     """

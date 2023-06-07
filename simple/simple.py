@@ -463,14 +463,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         try:
             self.run_pk = input_dict["run_pk"]
         except:
-            self.run_pk = {
-                "intensity": False,
-                "n_gal": False,
-                "cross": False,
-                "sky_subtracted_intensity": False,
-                "sky_subtracted_cross": False
-            }
+            self.run_pk = {}
             pass
+        for tracer in ["intensity", "n_gal", "cross", "sky_subtracted_intensity", "sky_subtracted_cross"]:
+            if tracer not in self.run_pk.keys():
+                self.run_pk[tracer] = False
+
         if "dk" in input_dict.keys():
             self.dk = input_dict["dk"]
         else:
@@ -1226,7 +1224,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Done.")
         return
 
-    def assign_flux(self):
+    def assign_flux(self, luminosity="luminosity"):
         """
         Converts luminosity to flux in the galaxy catalog.
         Only accounts for the cosmological effects, no corrections due to peculiar velocities.
@@ -1243,7 +1241,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Converting luminosity to flux.")
         # check if the galaxies have luminosities. Otherwise assign them.
         try:
-            self.cat["luminosity"][0]
+            self.cat[luminosity][0]
         except KeyError:
             self.assign_luminosity()
 
@@ -1257,7 +1255,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )
         DL = (dl_at_z(self.cat["cosmo_redshift"]) * u.Mpc).to(u.cm)
 
-        flux = self.cat["luminosity"] / (4 * np.pi * DL**2)
+        flux = self.cat[luminosity] / (4 * np.pi * DL**2)
         self.cat["flux"] = flux
         logging.info("Mean flux: {}".format(np.mean(self.cat['flux'])))
         logging.info("Done.")
@@ -1511,6 +1509,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         position="RSD_Position",
         redshift="cosmo_redshift",
         tracer="intensity",
+        luminosity="luminosity",
     ):
         """
         Generates the mock intensity map,
@@ -1533,10 +1532,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     self.assign_single_redshift()
                 else:
                     self.assign_redshift_along_axis()
-        try:
-            self.cat["luminosity"][0]
-        except:
-            self.assign_luminosity()
+        if tracer == 'intensity':
+            try:
+                self.cat[luminosity][0]
+            except:
+                self.assign_luminosity()
 
         logging.info(
             "Painting {} mesh: {} galaxies, {}.".format(
@@ -1545,7 +1545,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )
 
         if galaxy_selection == "all":
-            mask = np.ones(self.cat["luminosity"].shape, dtype=bool)
+            mask = np.ones(self.cat[position].shape[0], dtype=bool)
         elif galaxy_selection == "detected":
             mask = np.array(self.cat["detected"])
         elif galaxy_selection == "undetected":
@@ -1583,7 +1583,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     self.nu_restframe = (
                         const.c / self.lambda_restframe).to(u.Hz)
                 signal = (
-                    (self.cat["luminosity"][mask] / Vcell_true)
+                    (self.cat[luminosity][mask] / Vcell_true)
                     * const.c**3
                     * (1 + self.cat[redshift][mask]) ** 2
                     / (8 * np.pi * u.sr * const.k_B * self.nu_restframe**3 * Hubble)
@@ -1595,7 +1595,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 signal = (
                     const.c
                     / (4.0 * np.pi * rest_wave_or_freq * Hubble * (1.0 * u.sr))
-                    * self.cat["luminosity"][mask]
+                    * self.cat[luminosity][mask]
                     / Vcell_true
                 )
                 signal = signal.to(
@@ -1604,7 +1604,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 mean_signal = np.mean(signal)
                 signal = signal.to(mean_signal)
         elif tracer == "n_gal":
-            signal = (np.ones(self.cat["luminosity"][mask].shape) / Vcell_true).to(
+            signal = (np.ones(self.cat[position][mask].shape[0]) / Vcell_true).to(
                 u.Mpc ** (-3)
             )  # n_gal
             # n_bar_gal_masked = self.cat['luminosity'][mask].size / np.product(self.box_size.to(u.Mpc).value) * u.Mpc**(-3)
@@ -1971,6 +1971,21 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         self.prepared_n_gal_mesh_ft = galaxy_map_to_use.r2c()
         return
+    
+    def prepare_k_values(self):
+        try:
+            dk = self.dk.to(self.Mpch**-1).value
+        except:
+            dk = self.dk
+        try:
+            kmin = self.kmin.to(self.Mpch**-1).value
+        except:
+            kmin = self.kmin
+        try:
+            kmax = self.kmax.to(self.Mpch**-1).value
+        except:
+            kmax = self.kmax
+        return (kmin, kmax, dk)
 
     def Pk_multipoles(self, tracer="intensity", save=False):
         """
@@ -2037,19 +2052,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         # make sure that the LOS is the x axis
         assert (self.LOS == [1, 0, 0]).all()
 
-        try:
-            dk = self.dk.to(self.Mpch**-1).value
-        except:
-            dk = self.dk
-        try:
-            kmin = self.kmin.to(self.Mpch**-1).value
-        except:
-            kmin = self.kmin
-        try:
-            kmax = self.kmax.to(self.Mpch**-1).value
-        except:
-            kmax = self.kmax
-        print(kmin, kmax, dk)
+        (kmin, kmax, dk) = self.prepare_k_values()
+        logging.info("kmin, kmax, dk = {} {} {}".format(kmin, kmax, dk))
 
         logging.info("Prepared k values.")
 
@@ -2390,9 +2394,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.save_to_file(filename=filename,
                               catalog_filename=self.catalog_filename)
 
-        if self.run_pk["intensity"]:
-            self.Pk_multipoles(tracer="intensity", save=save_results)
-        if self.run_pk["n_gal"]:
-            self.Pk_multipoles(tracer="n_gal", save=save_results)
-        if self.run_pk["cross"]:
-            self.Pk_multipoles(tracer="cross", save=save_results)
+        for tracer in ["intensity", "n_gal", "cross", "sky_subtracted_intensity", "sky_subtracted_cross"]:
+            if self.run_pk[tracer]:
+                self.Pk_multipoles(tracer=tracer, save=save_results)
