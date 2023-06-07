@@ -10,7 +10,7 @@ RSD : False
 
 # galaxy luminosity function & selection
 luminosity_unit: '1e42 * u.erg / u.s'
-Lmin : '(4e40 * u.erg / u.s)' # see figure 4 in Gronke+15
+Lmin : '(1e41 * u.erg / u.s)' # see figure 4 in Gronke+15
 Lmax : '(np.inf * u.erg / u.s)'
 min_flux : "./tests/input/validation_fluxlimits_wavedep_sensitivity.ecsv"
 # limit_ngal: '0.0006378481529983525 * 1 / u.Mpc**3 ' # to get the target number of galaxies: 2.5/IFU.

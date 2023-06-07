@@ -6,7 +6,8 @@ import sys
 
 import astropy.constants as const
 import astropy.units as u
-import astropy.cosmology as astropy_cosmology # have to keep it to initiate cosmology in LIM.
+# have to keep it to initiate cosmology in LIM.
+import astropy.cosmology as astropy_cosmology
 import dask.array as da
 import h5py
 import numpy as np
@@ -302,10 +303,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             cosmology = input_dict["cosmology"]
         if isinstance(cosmology, str):
             try:
-                self.astropy_cosmo = eval("astropy_cosmology.{}".format(cosmology))
+                self.astropy_cosmo = eval(
+                    "astropy_cosmology.{}".format(cosmology))
             except:
                 logging.info(f"Initiating cosmology from file {cosmology}.")
-                self.astropy_cosmo = Cosmology.read(cosmology, format="ascii.ecsv")
+                self.astropy_cosmo = Cosmology.read(
+                    cosmology, format="ascii.ecsv")
         elif isinstance(cosmology, dict):
             self.astropy_cosmo = FlatwCDM(**cosmology)
             print("MNU: ", self.astropy_cosmo.m_nu)
@@ -487,9 +490,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             self.N_mu = 11
         try:
-            self.nkbin = np.floor((self.kmax - self.kmin) / self.dk).astype(int) - 1
+            self.nkbin = np.floor(
+                (self.kmax - self.kmin) / self.dk).astype(int) - 1
         except:
-            self.nkbin = np.floor(((self.kmax.to(1/self.Mpch).value - self.kmin.to(1/self.Mpch).value)/self.dk.to(1/self.Mpch).value).astype(int) - 1)
+            self.nkbin = np.floor(((self.kmax.to(1/self.Mpch).value - self.kmin.to(
+                1/self.Mpch).value)/self.dk.to(1/self.Mpch).value).astype(int) - 1)
 
         # initiate obs_mask
         if "obs_mask" in input_dict.keys():
@@ -505,9 +510,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.obs_mask = None
 
         self.noise_mesh = None
-        self.prepared_skysub_intensity_mesh = None
-        self.prepared_intensity_mesh = None
-        self.prepared_n_gal_mesh = None
+        self.prepared_skysub_intensity_mesh_ft = None
+        self.prepared_intensity_mesh_ft = None
+        self.prepared_n_gal_mesh_ft = None
         logging.info("Done")
 
     def copy_info(self):
@@ -519,7 +524,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.input_dict['cosmology'] = self.astropy_cosmo
         if 'luminosity_function' not in self.input_dict.keys():
             self.input_dict['luminosity_function'] = self.luminosity_function
-        
+
         return LognormalIntensityMock(self.input_dict)
 
     def convert_input_dictionary(self, data):
@@ -952,7 +957,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             / (1.0 + params["z"])
         )
         # if params['inp_pk_fname'] is blanck,  use Eisenstein & Hu for input pk
-        #if params["inp_pk_fname"] is None:
+        # if params["inp_pk_fname"] is None:
         #    params["inp_pk_fname"] = os.path.join(
         #        params["out_dir"], "inputs", params["ofile_prefix"] + "_pk.txt"
         #    )
@@ -975,7 +980,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 params["cpkg_fname"] = os.path.join(
                     params["out_dir"], "inputs", params["ofile_prefix"] + "_cpkG.dat"
                 )
-        #if params["f_fname"] == "":
+        # if params["f_fname"] == "":
         #    params["f_fname"] = os.path.join(
         #        params["out_dir"], "inputs", params["ofile_prefix"] + "_fnu.txt"
         #    )
@@ -1930,13 +1935,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         # multiply by the mask
         if self.obs_mask is not None:
             intensity_map_to_use = intensity_map_to_use * self.obs_mask
-        
+
         if sky_subtraction:
-            self.prepared_skysub_intensity_mesh = intensity_map_to_use
+            self.prepared_skysub_intensity_mesh_ft = intensity_map_to_use.r2c()
         else:
-            self.prepared_intensity_mesh = intensity_map_to_use
-        return 
-    
+            self.prepared_intensity_mesh_ft = intensity_map_to_use.r2c()
+        return
+
     def _get_prepared_n_gal_mesh(self):
         try:
             galaxy_map = self.n_gal_mesh
@@ -1947,11 +1952,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
             :, None, None]
         galaxy_map = ((self.n_gal_mesh - mean_ngal_per_z) /
-                    mean_ngal_per_z).to(1)
+                      mean_ngal_per_z).to(1)
         galaxy_rfield = make_map(galaxy_map,
-                                Nmesh=self.N_mesh,
-                                BoxSize=self.box_size.to(self.Mpch).value,
-                                )
+                                 Nmesh=self.N_mesh,
+                                 BoxSize=self.box_size.to(self.Mpch).value,
+                                 )
         galaxy_map_to_use = galaxy_rfield
         # changed this: always apply cic correction to galaxy mesh.
         if True:  # tracer == "n_gal":
@@ -1963,14 +1968,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         if self.obs_mask is not None:
             galaxy_map_to_use = galaxy_map_to_use * self.obs_mask
-        
-        self.prepared_n_gal_mesh = galaxy_map_to_use
-        return 
 
+        self.prepared_n_gal_mesh_ft = galaxy_map_to_use.r2c()
+        return
 
-    def Pk_2d(self, tracer="intensity", save=False):
+    def Pk_multipoles(self, tracer="intensity", save=False):
         """
-        Computes the 2d power spectrum P(k,mu) of the map
+        Computes the power spectrum monopole and quadrupole of the map
 
         Parameters
         -----------
@@ -1979,41 +1983,42 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Default: 'intensity'.
         """
 
-        logging.info(f"Getting 2D power spectrum of {tracer}.")
+        logging.info(f"Getting power spectrum multipoles of {tracer}.")
 
         if tracer in [
             "intensity",
-            "cross"]:
-            if self.prepared_intensity_mesh is None: # do it like this because otherwise the save_to_file acts weird with cached_property.
+                "cross"]:
+            # do it like this because otherwise the save_to_file acts weird with cached_property.
+            if self.prepared_intensity_mesh_ft is None:
                 self._get_prepared_intensity_mesh(sky_subtraction=False)
-            intensity_map_to_use = self.prepared_intensity_mesh
+            intensity_map_to_use_ft = self.prepared_intensity_mesh_ft
 
             if tracer == "intensity":
-                galaxy_map_to_use = None
-            
+                galaxy_map_to_use_ft = None
+
             logging.info("Prepared intensity map.")
 
         elif tracer in [
             "sky_subtracted_intensity",
             "sky_subtracted_cross",
         ]:
-            if self.prepared_skysub_intensity_mesh is None:
+            if self.prepared_skysub_intensity_mesh_ft is None:
                 self._get_prepared_intensity_mesh(sky_subtraction=True)
-            intensity_map_to_use = self.prepared_skysub_intensity_mesh
+            intensity_map_to_use_ft = self.prepared_skysub_intensity_mesh_ft
 
             if tracer == "sky_subtracted_intensity":
-                galaxy_map_to_use = None
-            
+                galaxy_map_to_use_ft = None
+
             logging.info("Prepared intensity map.")
 
         if tracer in ["n_gal", "cross", "sky_subtracted_cross"]:
-            
-            if self.prepared_n_gal_mesh is None:
+
+            if self.prepared_n_gal_mesh_ft is None:
                 self._get_prepared_n_gal_mesh()
-            galaxy_map_to_use = self.prepared_n_gal_mesh
+            galaxy_map_to_use_ft = self.prepared_n_gal_mesh_ft
             if tracer == "n_gal":
-                intensity_map_to_use = None
-            
+                intensity_map_to_use_ft = None
+
             logging.info("Prepared galaxy map.")
 
         if tracer not in [
@@ -2048,24 +2053,21 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         logging.info("Prepared k values.")
 
-        map_1 = None
+        map_1_ft = None
         if tracer in ["intensity", "sky_subtracted_intensity"]:
-            map_1 = intensity_map_to_use
+            map_1_ft = intensity_map_to_use_ft
             pk_unit = self.mean_intensity**2
         elif tracer == "n_gal":
-            map_1 = galaxy_map_to_use
+            map_1_ft = galaxy_map_to_use_ft
             pk_unit = 1
-        if map_1 is not None:
-            map_1_ft = map_1.r2c()
+        if map_1_ft is not None:
             delta_k_sq = np.real(map_1_ft) ** 2 + np.imag(map_1_ft) ** 2
-            del map_1, map_1_ft
+            del map_1_ft
         elif tracer in ["cross", "sky_subtracted_cross"]:
-            map_1 = intensity_map_to_use
-            map_2 = galaxy_map_to_use
-            map_1_ft = map_1.r2c()
-            map_2_ft = map_2.r2c()
+            map_1_ft = intensity_map_to_use_ft
+            map_2_ft = galaxy_map_to_use_ft
             delta_k_sq = np.array(map_1_ft * np.conjugate(map_2_ft))
-            del map_1, map_2, map_1_ft, map_2_ft
+            del map_1_ft, map_2_ft
             pk_unit = self.mean_intensity
 
         logging.info("Calculated delta k squared.")
@@ -2120,7 +2122,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             mean_mu_2d,
             P_k_mu,
         )
-    
 
     def get_mesh_positions(self, voxel_length, N_mesh, save_to_self=True):
         """
@@ -2390,8 +2391,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                               catalog_filename=self.catalog_filename)
 
         if self.run_pk["intensity"]:
-            self.Pk_2d(tracer="intensity", save=save_results)
+            self.Pk_multipoles(tracer="intensity", save=save_results)
         if self.run_pk["n_gal"]:
-            self.Pk_2d(tracer="n_gal", save=save_results)
+            self.Pk_multipoles(tracer="n_gal", save=save_results)
         if self.run_pk["cross"]:
-            self.Pk_2d(tracer="cross", save=save_results)
+            self.Pk_multipoles(tracer="cross", save=save_results)
