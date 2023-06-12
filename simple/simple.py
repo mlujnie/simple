@@ -1203,7 +1203,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             min_log10_L_for_probability, max_log10_L_for_probability, N_probability
         )
         probability = self.log10_luminosity_function(Ls)
+        probability = np.max([np.zeros(len(probability)), probability], axis=0)
         probability = probability / np.sum(probability)
+        logging.info(f"Minimum probability: {np.min(probability)}")
 
         np.random.seed(self.seed_lognormal)
 
