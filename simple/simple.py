@@ -2377,9 +2377,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             position = "Position"
             rsd_ext = "realspace"
-        self.paint_intensity_mesh(position=position)
-        self.get_intensity_noise_cube()
-        self.paint_galaxy_mesh(position=position)
+        
+        if self.run_pk['intensity'] or self.run_pk['cross'] or self.run_pk['sky_subtracted_intensity'] or self.run_pk['sky_subtracted_cross']:
+            self.paint_intensity_mesh(position=position)
+            self.get_intensity_noise_cube()
+        if self.run_pk['n_gal'] or self.run_pk['cross'] or self.run_pk['sky_subtracted_cross']:
+            self.paint_galaxy_mesh(position=position)
 
         if save_meshes:
             filename = os.path.join(
