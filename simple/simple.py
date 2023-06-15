@@ -357,7 +357,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.single_redshift = False
         self.LOS = np.array([1, 0, 0])
         self.RSD = input_dict["RSD"]
-        self.resampler = "cic"
+        self.resampler = "nearest"
+        self.nbodykit_resampler_name = self.resampler #"nearest" if self.resampler == "ngp" else "cic"
 
         # initiate luminosity function & selection
         self.luminosity_unit = input_dict["luminosity_unit"]
@@ -506,6 +507,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             assert (self.obs_mask.shape == self.N_mesh).all()
         else:
             self.obs_mask = None
+
+        if "calc_pk_lognormal" in input_dict.keys():
+            self.calc_pk_lognormal = input_dict['calc_pk_lognormal']
+        else:
+            self.calc_pk_lognormal = False
 
         self.noise_mesh = None
         self.prepared_skysub_intensity_mesh_ft = None
@@ -690,11 +696,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         return cat
 
     def save_to_file(self, filename, catalog_filename=None):
-        attributes = [
-            attr
-            for attr in dir(self)
-            if not callable(getattr(self, attr)) and not attr.startswith("_") and not (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh'])
-        ]
+        attributes = []
+        for attr in dir(self):
+            if attr.startswith("_") or (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh']):
+                continue
+            elif callable(getattr(self, attr)): # don't leave it in one line with the previous because it may cause problems.
+                continue
+            else:
+                attributes.append(attr)
 
         with h5py.File(filename, "w") as ff:
             # save mean intensity
@@ -924,7 +933,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "rmax": 10000.0,
             "seed": self.seed_lognormal,
             "Pnmax": int(np.max(self.N_mesh)),
-            "losx": 1.0,
+            #"losx": 1.0,
             "losy": 0.0,
             "losz": 0.0,
             "kbin": 0.01,
@@ -932,7 +941,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "lmax": 4,
             "gen_inputs": True,
             "run_lognormal": True,
-            "calc_pk": False,
+            "calc_pk": self.calc_pk_lognormal,
             "calc_cpk": False,
             "use_cpkG": 0,
             "output_matter": 0,
@@ -947,6 +956,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "ob0": self.astropy_cosmo.Ob0,
             "ode0": self.astropy_cosmo.Ode0,
         }
+
+        if self.RSD:
+            params["losx"] = 1.0
+        else:
+            params["losx"] = 0.0
 
         params["As"] = np.exp(params["lnAs"]) * 1e-10
         params["aH"] = (
@@ -1008,6 +1022,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             logging.info("skip: generating log-normal catalog")
 
+        # calculate Pk
+        if params['calc_pk']:
+            args = (0, params, exe) 
+            run = wrap_calc_Pk(args)
+        else:
+            print('skip: calculate Pk')
+
     @functools.cached_property
     def _input_power_spectrum(self):
         input_power_spectrum_filename = os.path.join(
@@ -1027,9 +1048,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )
 
     def load_lognormal_catalog_cpp(self, bin_filename):
-        self.catalog_filename = transform_bin_to_h5(bin_filename)
+        self.catalog_filename, N_gal_lognormal = transform_bin_to_h5(bin_filename)
         logging.info("Done transforming the bin to h5 file.")
         self.cat = self.read_galaxy_catalog(self.catalog_filename)
+        logging.info(f"N_gal mismatch? {N_gal_lognormal}, {len(self.cat['Position'])}")
+        assert N_gal_lognormal == len(self.cat["Position"])
         self.cat["RSD_redshift_factor"] = (
             1 + da.dot(self.cat["Velocity"], self.LOS).compute() / const.c
         ).to(1)
@@ -1515,10 +1538,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     ):
         """
         Generates the mock intensity map,
-        obtained from Cartesian coordinates. It does not include noise.
+        obtained from Cartesian coordinates. 
+        It does not include noise.
         """
-        print("yep, new.")
-        n_mesh = self.N_mesh
         galaxy_selection = self.galaxy_selection[tracer]
         # check if the selection function was applied, otherwise apply it.
         if galaxy_selection in ["detected", "undetected"]:
@@ -1558,11 +1580,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )
 
         # Define the mesh divisions and the box size
-        Lbox = self.box_size
         lategrid = self.cat[position][mask].to(self.Mpch).value
 
         Vcell_true = (
-            np.product(self.box_size.to(u.Mpc).value / n_mesh) * (u.Mpc**3)
+            np.product(self.box_size.to(u.Mpc).value / self.N_mesh) * (u.Mpc**3)
         ).to(u.Mpc**3)
 
         if tracer == "intensity":  # calculate the intensity mesh
@@ -1619,8 +1640,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Min signal: {}".format(np.min(signal)))
         # Set the emitter in the grid and paint using pmesh directly instead of nbk
         pm = pmesh.pm.ParticleMesh(
-            n_mesh,
-            BoxSize=Lbox.to(self.Mpch).value,
+            self.N_mesh,
+            BoxSize=self.box_size.to(self.Mpch).value,
             dtype="float32",
             resampler=self.resampler,
         )
@@ -1661,7 +1682,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )  # orders the sigmas in the same axes as the data.
 
             # raise a warning if the smoothing length is smaller than the voxel length.
-            if (sigma < self.box_size.to(self.Mpch).value / n_mesh).any():
+            if (sigma < self.box_size.to(self.Mpch).value / self.N_mesh).any():
                 logging.warning(
                     "The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length."
                 )
@@ -1844,9 +1865,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         return self.sky_intensity_mesh
 
     @functools.cached_property
-    def compensation(self):
+    def _compensation(self):
         # We're not doing interlacing so get the approximate correction instead
-        return get_compensation(interlaced=False, resampler=self.resampler)
+        return get_compensation(interlaced=False, resampler=self.nbodykit_resampler_name)
 
     def getindep(self):
         nx, ny, nz = self.N_mesh
@@ -1911,11 +1932,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )
         # intensity_map_to_use = intensity_rfield
         # changed this: applying cic correction also to intensity mesh.
-        intensity_map_to_use = (
-            intensity_rfield.r2c().apply(
-                self.compensation[0][1], kind=self.compensation[0][2]
-            )
-        ).c2r()
+        if self.resampler == 'cic':
+            intensity_map_to_use = (
+                intensity_rfield.r2c().apply(
+                    self._compensation[0][1], kind=self._compensation[0][2]
+                )
+            ).c2r()
+        else:
+            intensity_map_to_use = intensity_rfield
 
         if sky_subtraction:
             intensity_map_to_use = intensity_map_to_use - (
@@ -1953,18 +1977,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
             :, None, None]
-        galaxy_map = ((self.n_gal_mesh - mean_ngal_per_z) /
-                      mean_ngal_per_z).to(1)
-        galaxy_rfield = make_map(galaxy_map,
+        galaxy_map = (self.n_gal_mesh / mean_ngal_per_z).to(1) - 1.
+        galaxy_map_to_use = make_map(galaxy_map,
                                  Nmesh=self.N_mesh,
                                  BoxSize=self.box_size.to(self.Mpch).value,
                                  )
-        galaxy_map_to_use = galaxy_rfield
         # changed this: always apply cic correction to galaxy mesh.
-        if True:  # tracer == "n_gal":
+        if self.resampler == 'cic':  # tracer == "n_gal":
             galaxy_map_to_use = (
-                galaxy_rfield.r2c().apply(
-                    self.compensation[0][1], kind=self.compensation[0][2]
+                galaxy_map_to_use.r2c().apply(
+                    self._compensation[0][1], kind=self._compensation[0][2]
                 )
             ).c2r()
 

@@ -73,7 +73,7 @@ def transform_bin_to_h5(bin_filename, h5_filename=None):
         ffile["Velocity"] = galvel
         ffile["Velocity"].attrs["unit"] = "u.km * u.s**(-1)"
     print(f"Saved to {h5_filename}")
-    return h5_filename
+    return h5_filename, N_gal
 
 
 def get_cylinder_mask(N_mesh):

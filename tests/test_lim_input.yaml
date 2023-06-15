@@ -45,6 +45,8 @@ out_dir : './tests/tmp/'
 
 # obs_mask : '~/intensity-mapping/data/hetdex_fall_field_mask_holes_623_0.h5'
 
+calc_pk_lognormal : True
+
 luminosity_function : './tests/input/luminosity_function_example.csv'
 #cosmology : 'Planck18'
 cosmology : "./tests/input/example_cosmology.ecsv"
