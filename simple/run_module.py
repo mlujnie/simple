@@ -75,19 +75,19 @@ def gen_inputs(params, exe):
         "mnu",
         "z",
     ]  # do not change the order
-    exe.run(main_lognormal_path + "eisensteinhubaonu/compute_pk", args, params)
+    exe.run(os.path.join(main_lognormal_path, "eisensteinhubaonu/compute_pk"), args, params)
 
     # powerspectrum to correlation function xi
-    params["ofile_xi"] = params["out_dir"] + "/inputs/" + params["ofile_prefix"]
+    params["ofile_xi"] = os.path.join(params["out_dir"] , "inputs" , params["ofile_prefix"])
     params["len_inp_pk"] = sum(1 for line in open(params["inp_pk_fname"]))
     # do not change the order
     args = ["ofile_xi", "inp_pk_fname", "len_inp_pk"]
-    exe.run(main_lognormal_path + "compute_xi/compute_xi", args, params)
+    exe.run(os.path.join(main_lognormal_path, "compute_xi/compute_xi"), args, params)
 
     # Gaussian power spectrum for galaxy field
     params["ncol"] = np.size(np.loadtxt(params["xi_fname"])[0, :])
     args = ["pkg_fname", "xi_fname", "ncol", "bias", "rmax"]  # do not change the order
-    exe.run(main_lognormal_path + "compute_pkG/calc_pkG", args, params)
+    exe.run(os.path.join(main_lognormal_path,  "compute_pkG/calc_pkG"), args, params)
 
     # Gaussian power spectrum for matter field
     args = [
@@ -97,7 +97,7 @@ def gen_inputs(params, exe):
         "bias_mpkG",
         "rmax",
     ]  # do not change the order
-    exe.run(main_lognormal_path + "compute_pkG/calc_pkG", args, params)
+    exe.run(os.path.join(main_lognormal_path , "compute_pkG/calc_pkG"), args, params)
 
     # Gaussian cross power spectrum for galaxy-matter field
     if params["use_cpkG"] == 1:
@@ -109,7 +109,7 @@ def gen_inputs(params, exe):
             "bias_cpkG",
             "rmax",
         ]  # do not change the order
-        exe.run(main_lognormal_path + "compute_pkG/calc_pkG", args, params)
+        exe.run(os.path.join(main_lognormal_path,  "compute_pkG/calc_pkG"), args, params)
         params["bias_cpkG"] = (params["bias_cpkG"]) ** 2.0
 
 
@@ -163,7 +163,7 @@ def gen_Poisson(i, params, seed1, seed2, seed3, exe):
         "output_gal",
     ]  # do not change the order
     exe.run(
-        main_lognormal_path + "generate_Poisson/gen_Poisson_mock_LogNormal",
+        os.path.join(main_lognormal_path, "generate_Poisson/gen_Poisson_mock_LogNormal"),
         args,
         params_tmp,
     )
@@ -229,7 +229,7 @@ def calc_Pk(i, params, exe):
         "calc_mode_pk",
     ]
     exe.run(
-        main_lognormal_path + "calculate_pk/calc_pk_const_los_ngp", args, params_tmp
+        os.path.join(main_lognormal_path + "calculate_pk/calc_pk_const_los_ngp"), args, params_tmp
     )
 
 
@@ -306,7 +306,7 @@ def calc_cPk(i, params, exe):
         "tmp2",
     ]
     exe.run(
-        main_lognormal_path + "calculate_cross/calc_cpk_const_los_v2", args, params_tmp
+        os.path.join(main_lognormal_path, "calculate_cross/calc_cpk_const_los_v2"), args, params_tmp
     )
 
 
