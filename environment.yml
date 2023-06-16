@@ -1,0 +1,13 @@
+name: simpleenv
+channels:
+  - bccp
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy
+  - scipy
+  - astropy
+  - h5py
+  - dask
+  - pmesh
+  - nbodykit
