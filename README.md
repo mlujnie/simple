@@ -8,10 +8,10 @@
 * type `pip install .` in the root directory of this repo.
 
 ### add following information: 
-• Brief description of features
-• Usage (with examples)
-• Build and install (with examples)
-• Dependencies
+* Brief description of features
+* Usage (with examples)
+* Build and install (with examples)
+* Dependencies
     * python 3.8 (for pmesh)
     * scipy
     * numpy
@@ -20,5 +20,5 @@
     * dask
     * pmesh
     * nbodykit 
-• Status of the code and how it is maintained
-• License \check
+* Status of the code and how it is maintained
+* License \check
