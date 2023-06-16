@@ -5,11 +5,32 @@ import psutil
 import os
 import pmesh
 import logging
-from yaml import load
+#from yaml import load
+from astropy.io.misc import yaml
 from scipy.stats import binned_statistic_2d, binned_statistic
 from scipy.special import legendre, j1
+from scipy.interpolate import interp1d
 
+def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolate'):
+    '''
+    Logarithmic interpolation accepting linear quantities as input (transformed
+    within the function)
+    '''
+    ind = np.where(yy>0)
+    try:
+        logx = np.log10(xx[ind].value)
+    except:
+        logx = np.log10(xx[ind])
+    try:
+        logy = np.log10(yy[ind].value)
+    except:
+        logy = np.log10(yy[ind])
+    lin_interp = interp1d(logx, logy, kind=kind,bounds_error=bounds_error,fill_value=fill_value)
+    
+    log_interp = lambda zz: np.power(10.0, lin_interp(np.log10(zz)))
 
+    return log_interp
+    
 def get_memory_usage():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / 1073741824  # in GB
@@ -17,7 +38,8 @@ def get_memory_usage():
 
 def yaml_file_to_dictionary(filename):
     with open(filename, "r") as stream:
-        data = yaml_stream_to_dictionary(stream)
+        data = yaml.load(stream)
+        #data = yaml_stream_to_dictionary(stream)
     return data
 
 
@@ -239,7 +261,7 @@ def make_map(m, Nmesh, BoxSize, type="real"):
 
     """
     pm = pmesh.pm.ParticleMesh(
-        Nmesh, BoxSize=BoxSize, dtype="float32", resampler="cic")
+        Nmesh, BoxSize=BoxSize, dtype="float32")
     field = pm.create(type=type)
     field[...] = m
     return field
