@@ -32,7 +32,8 @@ from simple.lognormal_im_module import (
     bin_scipy,
     jinc,
     yaml_file_to_dictionary,
-    make_map
+    make_map,
+    log_interp1d
 )
 
 
@@ -259,7 +260,7 @@ class LognormalIntensityMock:
         ):  # if it is the name of a file, try to get the table from the file
             luminosity_function_table = Table.read(
                 luminosity_function, format="csv")
-            self.luminosity_function = interp1d(
+            self.luminosity_function = log_interp1d(
                 luminosity_function_table["L"],
                 luminosity_function_table["dn/dL"],
                 fill_value="extrapolate",
@@ -271,7 +272,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         elif callable(luminosity_function):  # if it is a function, directly use it
             self.luminosity_function = luminosity_function
         else:  # hope that it is a table or dictionary
-            self.luminosity_function = interp1d(
+            self.luminosity_function = log_interp1d(
                 luminosity_function["L"],
                 luminosity_function["dn/dL"],
                 fill_value="extrapolate",
@@ -896,6 +897,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info(
             "Expecting {} galaxies in the simulation.".format(self.N_gal))
 
+        print(self.astropy_cosmo.m_nu)
         params = {
             "ofile_prefix": self.outfile_prefix,
             "inp_pk_fname": self.input_pk_filename,
@@ -1146,7 +1148,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "Assigning single redshift for the whole box: {}.".format(
                 self.redshift)
         )
-        self.cat["cosmo_redshift"] = self.redshift
+        self.cat["cosmo_redshift"] = self.redshift * np.ones(len(self.cat['RSD_redshift_factor']))
         self.delta_redshift = 0.0
         # with RSD
         self.cat["RSD_redshift"] = (
@@ -1156,13 +1158,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.cat["Position"]
             + (
                 (self.cat["Velocity"] * self.LOS)
-                * u.km
-                / u.s
-                * (1 + self.cat["cosmo_redshift"])
-                / (self.astropy_cosmo.H(self.cat["cosmo_redshift"]))
+                #* u.km
+                #/ u.s
+                * ((1 + self.cat["cosmo_redshift"])
+                / (self.astropy_cosmo.H(self.cat["cosmo_redshift"])))[:,None]
             )
             .to(self.Mpch)
-            .value
+            #.value
         )  # in Mpc / h
         logging.info("Done.")
         return
@@ -1191,7 +1193,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         max_L_for_probability = self.Lmax.to(self.luminosity_unit).value
         if not np.isfinite(max_L_for_probability):
             max_log10_L_for_probability = np.log10(
-                (1000 * self.Lmin).to(self.luminosity_unit).value
+                (1e10 * self.Lmin).to(self.luminosity_unit).value
+            )
+        else:
+            max_log10_L_for_probability = np.log10(
+                (self.Lmax).to(self.luminosity_unit).value
             )
         min_log10_L_for_probability = np.log10(
             self.Lmin.to(self.luminosity_unit).value)
@@ -1223,6 +1229,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("log10_L_choice: length {}".format(L_choice.shape))
 
         self.cat["luminosity"] = L_choice * self.luminosity_unit
+        self.Lmax = self.cat["luminosity"].max()
         logging.info("Done.")
         return
 
@@ -1588,9 +1595,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     (self.cat[luminosity][mask] / Vcell_true)
                     * const.c**3
                     * (1 + self.cat[redshift][mask]) ** 2
-                    / (8 * np.pi * u.sr * const.k_B * self.nu_restframe**3 * Hubble)
+                    / (8 * np.pi * const.k_B * self.nu_restframe**3 * Hubble)
                 )
-                signal = signal.to(u.uK / u.sr)
+                signal = signal.to(u.uK)
                 mean_signal = np.mean(signal)
                 signal = signal.to(mean_signal)
             else:
@@ -1769,35 +1776,38 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.paint_intensity_mesh()
 
         logging.info("Getting noise mesh.")
+        
+        if self.sigma_noise == None:
+            self.noise_mesh = da.zeros(self.intensity_mesh.shape)
+        else:
+            da.random.seed(self.seed_lognormal)
+            if callable(self.sigma_noise):
+                self.sigma_noise(
+                    self.redshift
+                )  # see if it is a function of redshift ~ wavelength
+                los_axis = np.where(self.LOS == 1)[0][0]
+                assert los_axis == 0
+                los_axis_shape = self.N_mesh[los_axis]
+                redshifts = self.redshift_mesh_axis
+                sigmas = da.ones(self.intensity_mesh.shape)
+                # transpose array so that the LOS is the last axis
+                transpose_axes = [1, 2, 0]
+                sigmas = da.transpose(sigmas, axes=transpose_axes)
+                # multiply by the sigma in each redshift slice
+                sigmas = sigmas * \
+                    self.sigma_noise(redshifts).to(self.mean_intensity).value
+                noise_mesh = da.random.normal(
+                    loc=0, scale=sigmas, size=sigmas.shape)
+                back_transpose_axes = [2, 0, 1]
+                noise_mesh = da.transpose(noise_mesh, axes=back_transpose_axes)
 
-        da.random.seed(self.seed_lognormal)
-        if callable(self.sigma_noise):
-            self.sigma_noise(
-                self.redshift
-            )  # see if it is a function of redshift ~ wavelength
-            los_axis = np.where(self.LOS == 1)[0][0]
-            assert los_axis == 0
-            los_axis_shape = self.N_mesh[los_axis]
-            redshifts = self.redshift_mesh_axis
-            sigmas = da.ones(self.intensity_mesh.shape)
-            # transpose array so that the LOS is the last axis
-            transpose_axes = [1, 2, 0]
-            sigmas = da.transpose(sigmas, axes=transpose_axes)
-            # multiply by the sigma in each redshift slice
-            sigmas = sigmas * \
-                self.sigma_noise(redshifts).to(self.mean_intensity).value
-            noise_mesh = da.random.normal(
-                loc=0, scale=sigmas, size=sigmas.shape)
-            back_transpose_axes = [2, 0, 1]
-            noise_mesh = da.transpose(noise_mesh, axes=back_transpose_axes)
-
-        else:  # if it is not a function, but a scalar
-            self.sigma_noise = self.sigma_noise.to(self.mean_intensity)
-            # in intensity or temperature units.
-            sigma = self.sigma_noise.value
-            noise_mesh = da.random.normal(
-                loc=0, scale=sigma, size=self.intensity_mesh.shape
-            )
+            else:  # if it is not a function, but a scalar
+                self.sigma_noise = self.sigma_noise.to(self.mean_intensity)
+                # in intensity or temperature units.
+                sigma = self.sigma_noise.value
+                noise_mesh = da.random.normal(
+                    loc=0, scale=sigma, size=self.intensity_mesh.shape
+                )
 
         self.noise_mesh = (noise_mesh * self.mean_intensity).compute()
 
@@ -2297,8 +2307,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 (mean_luminosity_density)
                 * const.c**3
                 * (1 + redshifts) ** 2
-                / (8 * np.pi * u.sr * const.k_B * self.nu_restframe**3 * Hubble)
-            )
+                / (8 * np.pi * const.k_B * self.nu_restframe**3 * Hubble)
+            ).to(u.uK)
         else:
             if self.lambda_restframe is not None:
                 rest_wave_or_freq = self.lambda_restframe
