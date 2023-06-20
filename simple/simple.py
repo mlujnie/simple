@@ -28,13 +28,14 @@ from simple.run_module import *
 from simple.lognormal_im_module import (
     transform_bin_to_h5,
     getindep,
-    get_kspec,
     bin_scipy,
     jinc,
     yaml_file_to_dictionary,
     make_map,
     log_interp1d
 )
+from simple.tools import catalog_to_mesh_cython
+from simple.tools import get_kspec_cython
 
 
 def aniso_filter(k, v):
@@ -358,8 +359,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.single_redshift = False
         self.LOS = np.array([1, 0, 0])
         self.RSD = input_dict["RSD"]
-        self.resampler = "nearest"
-        self.nbodykit_resampler_name = self.resampler #"nearest" if self.resampler == "ngp" else "cic"
 
         # initiate luminosity function & selection
         self.luminosity_unit = input_dict["luminosity_unit"]
@@ -1586,9 +1585,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 "galaxy_selection must be either 'all' or 'detected' or 'undetected'."
             )
 
-        # Define the mesh divisions and the box size
-        lategrid = self.cat[position][mask].to(self.Mpch).value
-
         Vcell_true = (
             np.product(self.box_size.to(u.Mpc).value / self.N_mesh) * (u.Mpc**3)
         ).to(u.Mpc**3)
@@ -1645,22 +1641,18 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )
         logging.info("Signal : {}".format(signal))
         logging.info("Min signal: {}".format(np.min(signal)))
-        # Set the emitter in the grid and paint using pmesh directly instead of nbk
-        pm = pmesh.pm.ParticleMesh(
-            self.N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
-            dtype="float32",
-            resampler=self.resampler,
+
+        field = catalog_to_mesh_cython(
+            self.cat[position][mask].to(self.Mpch).value,
+            signal.value.astype(float),
+            self.N_mesh.astype(int),
+            self.box_size.to(self.Mpch).value
         )
-        # Make realfield object
-        field = pm.create(type="real")
-        field[:] = 0.0
-        layout = pm.decompose(lategrid)
-        # Exchange positions between different MPI ranks
-        p = layout.exchange(lategrid)
-        # Assign weights following the layout of particles
-        m = layout.exchange(signal.value)
-        pm.paint(p, out=field, mass=m, resampler=self.resampler)
+        field = make_map(
+            field,
+            Nmesh=self.N_mesh,
+            BoxSize=self.box_size.to(self.Mpch).value,
+        )
 
         logging.info(
             "Mean intensity before smoothing: {}.".format(np.mean(field)))
@@ -1891,15 +1883,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         nx, ny, nz = self.N_mesh
         lx, ly, lz = self.box_size.to(self.Mpch).value
 
-        kspec, muspec, indep, kx, ky, kz = get_kspec(
+        kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
             nx, ny, nz, lx, ly, lz, dohalf, doindep
         )
+        logging.info("Done with the biggest part including k_par and k_perp.")
 
         self.kspec = kspec
         self.muspec = muspec
         self.indep = indep
-        self.k_par = kspec * muspec
-        self.k_perp = kspec * np.sqrt(1 - muspec**2)
+        self.k_par = k_par
+        self.k_perp = k_perp
         self.kx = kx
         self.ky = ky
         self.kz = kz
@@ -1935,21 +1928,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def _get_prepared_intensity_mesh(self, sky_subtraction):
         intensity_map = self.intensity_mesh
         weights_im = self.mean_intensity  # _per_redshift_mesh
-        intensity_rfield = make_map(
+        intensity_map_to_use = make_map(
             (intensity_map / weights_im).to(1),
             Nmesh=self.N_mesh,
             BoxSize=self.box_size.to(self.Mpch).value,
         )
-        # intensity_map_to_use = intensity_rfield
-        # changed this: applying cic correction also to intensity mesh.
-        if self.resampler == 'cic':
-            intensity_map_to_use = (
-                intensity_rfield.r2c().apply(
-                    self._compensation[0][1], kind=self._compensation[0][2]
-                )
-            ).c2r()
-        else:
-            intensity_map_to_use = intensity_rfield
 
         if sky_subtraction:
             intensity_map_to_use = intensity_map_to_use - (
@@ -1992,13 +1975,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                                  Nmesh=self.N_mesh,
                                  BoxSize=self.box_size.to(self.Mpch).value,
                                  )
-        # changed this: always apply cic correction to galaxy mesh.
-        if self.resampler == 'cic':  # tracer == "n_gal":
-            galaxy_map_to_use = (
-                galaxy_map_to_use.r2c().apply(
-                    self._compensation[0][1], kind=self._compensation[0][2]
-                )
-            ).c2r()
 
         if self.obs_mask is not None:
             galaxy_map_to_use = galaxy_map_to_use * self.obs_mask

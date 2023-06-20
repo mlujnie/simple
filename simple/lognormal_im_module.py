@@ -120,54 +120,7 @@ def get_checker_mask(N_mesh, N_cells=1):
     obs_mask = np.array([obs_mask_2d for i in range(N_mesh[0])])
     return obs_mask
 
-
-def getindep(nx, ny, nz):
-    indep = np.full((nx, ny, nz // 2 + 1), False, dtype=bool)
-    indep[:, :, 1: nz // 2] = True
-    indep[1: nx // 2, :, 0] = True
-    indep[1: nx // 2, :, nz // 2] = True
-    indep[0, 1: ny // 2, 0] = True
-    indep[0, 1: ny // 2, nz // 2] = True
-    indep[nx // 2, 1: ny // 2, 0] = True
-    indep[nx // 2, 1: ny // 2, nz // 2] = True
-    indep[nx // 2, 0, 0] = True
-    indep[0, ny // 2, 0] = True
-    indep[nx // 2, ny // 2, 0] = True
-    indep[0, 0, nz // 2] = True
-    indep[nx // 2, 0, nz // 2] = True
-    indep[0, ny // 2, nz // 2] = True
-    indep[nx // 2, ny // 2, nz // 2] = True
-    return indep
-
-
-def get_kspec(nx, ny, nz, lx, ly, lz, dohalf=True, doindep=True):
-    """
-    docstring
-    """
-    kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=lx / nx)
-    ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=ly / ny)
-    if dohalf:
-        kz = 2.0 * np.pi * np.fft.fftfreq(nz, d=lz / nz)[: nz // 2 + 1]
-        indep = np.full((nx, ny, nz // 2 + 1), True, dtype=bool)
-        if doindep:
-            indep = getindep(nx, ny, nz)
-    else:
-        kz = 2.0 * np.pi * np.fft.fftfreq(nz, d=lz / nz)
-        indep = np.full((nx, ny, nz), True, dtype=bool)
-    indep[0, 0, 0] = False
-    kspec = np.sqrt(
-        kx[:, np.newaxis, np.newaxis] ** 2
-        + ky[np.newaxis, :, np.newaxis] ** 2
-        + kz[np.newaxis, np.newaxis, :] ** 2
-    )
-    kspec[0, 0, 0] = 1.0
-    muspec = np.absolute(kx[:, np.newaxis, np.newaxis]) / kspec
-    kspec[0, 0, 0] = 0.0
-
-    return kspec, muspec, indep, kx, ky, kz
-
-
-def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None):
+def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None, lmax=2):
     if two_d:
         P_k_mu, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
             kspec, muspec, pkspec, bins=[k_bins, mu_bins], statistic="mean"
@@ -188,13 +141,16 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None):
         kspec, pkspec, bins=k_bins, statistic="mean"
     )
     logging.info("Calculated monopole.")
-    quadrupole, k_edge, bin_number = binned_statistic(
-        kspec,
-        pkspec * legendre(2)(muspec),
-        bins=k_bins,
-        statistic="mean",
-    )
-    logging.info("Calculated quadrupole.")
+    if lmax == 2:
+        quadrupole, k_edge, bin_number = binned_statistic(
+            kspec,
+            pkspec * legendre(2)(muspec),
+            bins=k_bins,
+            statistic="mean",
+        )
+        logging.info("Calculated quadrupole.")
+    else:
+        quadrupole = np.zeros(np.shape(monopole))
     mean_k, k_edge, bin_number = binned_statistic(
         kspec, kspec, bins=k_bins, statistic="mean"
     )
@@ -208,7 +164,6 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None):
         mean_mu_2d,
         P_k_mu,
     )
-
 
 def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     P_k_2d, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(

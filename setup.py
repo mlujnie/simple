@@ -1,4 +1,5 @@
 from setuptools import setup
+from Cython.Build import cythonize
 
 setup(
     name='simple',
@@ -12,6 +13,8 @@ setup(
     install_requires=['mpi4py>=2.0', # modify!!!
                       'numpy',                     
                       ],
+ 
+    ext_modules = cythonize("simple/tools.pyx"),
 
     classifiers=[
         'Development Status :: 1 - Planning',
