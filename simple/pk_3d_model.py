@@ -17,12 +17,11 @@ import os
 from simple.lognormal_im_module import (
     print_memory_usage,
     transform_bin_to_h5,
-    getindep,
-    get_kspec,
     bin_scipy,
     jinc,
 )
 from simple.simple import make_map, LognormalIntensityMock
+from simple.tools import get_kspec_cython
 
 
 def kaiser_pkmu(Plin, k, mu, bias, f_growth):
@@ -188,10 +187,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     def k_N(self):
         return self.k_Nyquist[0].value
 
-    def getindep(self):
-        nx, ny, nz = self.N_mesh
-        return getindep(nx, ny, nz)
-
     def get_kspec(self, dohalf=True, doindep=True):
         """
         docstring
@@ -201,7 +196,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         lx, ly, lz = self.box_size.to(
             self.Mpch).value
 
-        kspec, muspec, indep, kx, ky, kz = get_kspec(
+        kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
             nx, ny, nz, lx, ly, lz, dohalf, doindep
         )
 
@@ -364,7 +359,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             with h5py.File(self.out_filename, "a") as ff:
                 if tracer in ff.keys():
                     del ff[tracer]
-                    logging.info(f'Overwriting {tracer} in file {out_filename}.')
+                    logging.info(f'Overwriting {tracer} in file {self.out_filename}.')
                 grp = ff.create_group(tracer)
                 ff[f"{tracer}/monopole"] = monopole
                 ff[f"{tracer}/quadrupole"] = quadrupole
@@ -687,9 +682,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             P_shot_smoothed = self.im_shot_noise_model
         else:
             P_shot_smoothed = self.get_intensity_shot_noise()
-        logging.info("P_shot intensity: {}".format(P_shot_smoothed))
         S_bar_im = self.get_S_bar(
             self.weight_mesh_im * self.obs_mask, sigma_noise_im)
+        logging.info("\nS_bar intensity: {}\n".format(S_bar_im))
         observed_volume = self.get_observed_volume()
         logging.info("Calculating multipoles.")
         if sky_subtraction:
@@ -728,9 +723,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.mean_ngal_per_redshift_mesh / self.voxel_volume
         )
         mean_ngal_per_redshift_mesh = self.mean_ngal_per_redshift_mesh  # lim.n_bar_gal
-        mask_window_function = (
-            self.obs_mask * mean_ngal_per_redshift_mesh * self.weight_mesh_ngal
-        )
+        mask_window_function = self.obs_mask
+        # self.obs_mask * mean_ngal_per_redshift_mesh * self.weight_mesh_ngal
         damping_function = 1.0
         if self.do_model_shot_noise:
             if self.ngal_shot_noise_model is None:

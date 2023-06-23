@@ -27,7 +27,6 @@ from nbodykit.source.mesh.catalog import get_compensation
 from simple.run_module import *
 from simple.lognormal_im_module import (
     transform_bin_to_h5,
-    getindep,
     bin_scipy,
     jinc,
     yaml_file_to_dictionary,
@@ -1870,10 +1869,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def _compensation(self):
         # We're not doing interlacing so get the approximate correction instead
         return get_compensation(interlaced=False, resampler=self.nbodykit_resampler_name)
-
-    def getindep(self):
-        nx, ny, nz = self.N_mesh
-        return getindep(nx, ny, nz)
 
     def get_kspec(self, dohalf=True, doindep=True):
         """
