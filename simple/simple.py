@@ -516,6 +516,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         self.prepared_skysub_intensity_mesh_ft = None
         self.prepared_intensity_mesh_ft = None
         self.prepared_n_gal_mesh_ft = None
+        self.sky_intensity_mesh = None
+        self.n_gal_mesh = None
+        self.intensity_mesh = None
         logging.info("Done")
 
     def copy_info(self):
@@ -649,18 +652,26 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     logging.info(
                         f"intensity_mesh.unit: {new_lim_instance.intensity_mesh.unit}"
                     )
+                else:
+                    new_lim_instance.intensity_mesh = None
                 if ("noise_mesh" in ff.keys()) and ("noise_mesh" in only_meshes):
                     logging.info("Initializing noise_mesh.")
                     new_lim_instance.noise_mesh = u.Quantity(
                         ff["noise_mesh"][:], unit=ff["noise_mesh"].attrs["unit"]
                     )
+                else:
+                    new_lim_instance.noise_mesh = None
                 if ("n_gal_mesh" in ff.keys()) and ("n_gal_mesh" in only_meshes):
                     logging.info("Initializing n_gal_mesh.")
                     new_lim_instance.n_gal_mesh = u.Quantity(
                         ff["n_gal_mesh"][:], unit=ff["n_gal_mesh"].attrs["unit"]
                     )
+                else:
+                    new_lim_instance.n_gal_mesh = None
                 if ("obs_mask" in ff.keys()) and ("obs_mask" in only_meshes):
                     new_lim_instance.obs_mask = ff["obs_mask"][:]
+                else:
+                    new_lim_instance.obs_mask = None
 
             if catalog_filename is not None:
                 new_lim_instance.cat = new_lim_instance.read_galaxy_catalog(
@@ -841,6 +852,68 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             logging.info(
                 f"Saved instance to file {filename} and {catalog_filename}.")
             return
+
+    def _downsample_mesh(self, mesh, new_N_mesh):
+        try:
+            unit = mesh.unit
+        except:
+            unit = None
+        map = make_map(mesh.value, Nmesh=self.N_mesh, BoxSize=self.box_size.to(self.Mpch).value)
+        pm_down = pmesh.pm.ParticleMesh(new_N_mesh,
+                                        BoxSize=self.box_size.to(self.Mpch).value, dtype='float32', resampler="nearest")
+        map = pm_down.downsample(map,keep_mean=True)
+        if unit is not None:
+            map = (np.array(map) * unit).to(unit)
+        return map
+    
+    def downsample_all_meshes(self, new_N_mesh):
+
+        assert isinstance(new_N_mesh[0], int)
+            
+        logging.info("Downsampling all meshes...")
+        if self.n_gal_mesh is not None:
+            self.n_gal_mesh = self._downsample_mesh(self.n_gal_mesh, new_N_mesh)
+            logging.info("Finished n_gal_mesh.")
+        if self.intensity_mesh is not None:
+            self.intensity_mesh = self._downsample_mesh(self.intensity_mesh, new_N_mesh)
+            logging.info("Finished intensity_mesh.")
+        if self.obs_mask is not None:
+            self.obs_mask = self._downsample_mesh(self.obs_mask, new_N_mesh)
+            logging.info("Finished obs_mask.")
+        if self.sky_intensity_mesh is not None:
+            self.sky_intensity_mesh = self._downsample_mesh(self.sky_intensity_mesh, new_N_mesh)
+            logging.info("Finished sky_intensity_mesh.")
+        if self.noise_mesh is not None:
+            self.noise_mesh = self._downsample_mesh(self.noise_mesh, new_N_mesh)
+            logging.info("Finished noise_mesh.")
+        
+        self.N_mesh = np.array(new_N_mesh)
+        self.voxel_size = (self.box_size / self.N_mesh).to(self.Mpch)
+        try:
+            del self.redshift_mesh_axis
+        except:
+            pass
+        try:
+            del self.voxel_volume
+        except:
+            pass
+        try:
+            del self.k_Nyquist
+        except:
+            pass
+        try:
+            del self.mean_intensity_per_redshift_mesh
+        except:
+            pass
+        try:
+            del self.mean_redshift
+        except:
+            pass
+        self.prepared_n_gal_mesh_ft = None
+        self.prepared_intensity_mesh_ft = None
+        self.prepared_skysub_intensity_mesh_ft = None
+        logging.info("Done.")
+
 
     @functools.cached_property
     def n_bar_gal(self):

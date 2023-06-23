@@ -11,6 +11,9 @@ class TestStringMethods(unittest.TestCase):
         self.assertEqual(lim.N_mesh[0], 16)
         self.assertTrue(len(lim.cat['Position']) > 0)
 
+        lim.downsample_all_meshes([8,8,8])
+        lim.run(skip_lognormal=True)
+
     def test_import_pk3dmodel(self):
         from simple.pk_3d_model import Power_Spectrum_Model
         from simple.simple import LognormalIntensityMock
