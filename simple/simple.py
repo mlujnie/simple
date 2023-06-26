@@ -50,6 +50,7 @@ def aniso_filter(k, v):
     the coordinate that sets what slab is being altered?
 
     """
+
     los_axis = 0  # np.where(LOS)[0][0]  # int
     perp_axes = [1, 2]  # np.where(LOS == 0)[0]  # list
     rper = sigma[perp_axes[0]]
@@ -88,6 +89,7 @@ def aniso_filter_gaussian(k, v):
     the coordinate that sets what slab is being altered?
 
     """
+
     los_axis = 0  # np.where(LOS)[0][0]  # int
     perp_axes = [1, 2]  # np.where(LOS == 0)[0]  # list
     rper = sigma[perp_axes[0]]
@@ -124,6 +126,7 @@ def angular_tophat_filter(k, v):
     the coordinate that sets what slab is being altered?
 
     """
+
     los_axis = 0  # np.where(LOS)[0][0]  # int
     perp_axes = [1, 2]  # np.where(LOS == 0)[0]  # list
     rper = tophat_size
@@ -553,6 +556,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ------
         None.
         """
+
         for key in data.keys():
             if isinstance(data[key], str):
                 if " cosmo" in data[key]:
@@ -605,6 +609,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> filename = "mock_data.hdf5"
         >>> instance = LognormalIntensityMock.from_file(filename)
         """
+
         level = logging.INFO
         FORMAT = "%(asctime)s simple %(levelname)s: %(message)s"
         logging.basicConfig(format=FORMAT, level=level)
@@ -754,6 +759,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> catalog_filename = "galaxy_catalog.h5"
         >>> catalog = instance.read_galaxy_catalog(catalog_filename)
         """
+
         logging.info(f"Initializing catalog from file {catalog_filename}.")
         with h5py.File(catalog_filename, "r") as ff:
             cat = {}
@@ -804,11 +810,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> catalog_filename = "lim_catalog.h5"
         >>> instance.save_to_file(filename, catalog_filename=catalog_filename)
         """
+
         attributes = []
         for attr in dir(self):
             if attr.startswith("_") or (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh']):
                 continue
-            elif callable(getattr(self, attr)): # don't leave it in one line with the previous because it may cause problems.
+            # don't leave it in one line with the previous because it may cause problems.
+            elif callable(getattr(self, attr)):
                 continue
             else:
                 attributes.append(attr)
@@ -972,18 +980,20 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> new_N_mesh = [16, 16, 16]
         >>> lim._downsample_mesh(lim.n_gal_mesh, new_N_mesh)
         """
+
         try:
             unit = mesh.unit
         except:
             unit = None
-        map = make_map(mesh.value, Nmesh=self.N_mesh, BoxSize=self.box_size.to(self.Mpch).value)
+        map = make_map(mesh.value, Nmesh=self.N_mesh,
+                       BoxSize=self.box_size.to(self.Mpch).value)
         pm_down = pmesh.pm.ParticleMesh(new_N_mesh,
                                         BoxSize=self.box_size.to(self.Mpch).value, dtype='float32', resampler="nearest")
-        map = pm_down.downsample(map,keep_mean=True)
+        map = pm_down.downsample(map, keep_mean=True)
         if unit is not None:
             map = (np.array(map) * unit).to(unit)
         return map
-    
+
     def downsample_all_meshes(self, new_N_mesh):
         """
         Downsamples all meshes to a new grid resolution using NGP: 
@@ -1011,24 +1021,28 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         """
 
         assert isinstance(new_N_mesh[0], int)
-            
+
         logging.info("Downsampling all meshes...")
         if self.n_gal_mesh is not None:
-            self.n_gal_mesh = self._downsample_mesh(self.n_gal_mesh, new_N_mesh)
+            self.n_gal_mesh = self._downsample_mesh(
+                self.n_gal_mesh, new_N_mesh)
             logging.info("Finished n_gal_mesh.")
         if self.intensity_mesh is not None:
-            self.intensity_mesh = self._downsample_mesh(self.intensity_mesh, new_N_mesh)
+            self.intensity_mesh = self._downsample_mesh(
+                self.intensity_mesh, new_N_mesh)
             logging.info("Finished intensity_mesh.")
         if self.obs_mask is not None:
             self.obs_mask = self._downsample_mesh(self.obs_mask, new_N_mesh)
             logging.info("Finished obs_mask.")
         if self.sky_intensity_mesh is not None:
-            self.sky_intensity_mesh = self._downsample_mesh(self.sky_intensity_mesh, new_N_mesh)
+            self.sky_intensity_mesh = self._downsample_mesh(
+                self.sky_intensity_mesh, new_N_mesh)
             logging.info("Finished sky_intensity_mesh.")
         if self.noise_mesh is not None:
-            self.noise_mesh = self._downsample_mesh(self.noise_mesh, new_N_mesh)
+            self.noise_mesh = self._downsample_mesh(
+                self.noise_mesh, new_N_mesh)
             logging.info("Finished noise_mesh.")
-        
+
         self.N_mesh = np.array(new_N_mesh)
         self.voxel_size = (self.box_size / self.N_mesh).to(self.Mpch)
         try:
@@ -1056,7 +1070,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         self.prepared_skysub_intensity_mesh_ft = None
         logging.info("Done.")
 
-
     @functools.cached_property
     def n_bar_gal(self):
         """
@@ -1065,12 +1078,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         It does not take the selection function into account.
         Make sure that the luminosity function output is in units of
         luminosity_function: dn/dL
-        integral: \int dn/dL dL = n_bar_gal # units of 1/Mpc**3
+        integral: $\int dn/dL dL = n_bar_gal$ in units of 1/Mpc**3
         IMPORTANT: The luminosity function input has to be in units of [Mpc^-3 luminosity_unit^-1]
         so that \int dn/dl dL is in units of [Mpc^-3].
 
         Cached like a property self.n_bar_gal.
-        
+
         Returns
         -------
         Quantity
@@ -1086,6 +1099,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock(...)
         >>> lim.n_bar_gal
         """
+
         logging.info("Getting mean galaxy number density.")
         integrated = quad(
             self.luminosity_function,
@@ -1196,7 +1210,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "rmax": 10000.0,
             "seed": self.seed_lognormal,
             "Pnmax": int(np.max(self.N_mesh)),
-            #"losx": 1.0,
+            # "losx": 1.0,
             "losy": 0.0,
             "losz": 0.0,
             "kbin": 0.01,
@@ -1287,7 +1301,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         # calculate Pk
         if params['calc_pk']:
-            args = (0, params, exe) 
+            args = (0, params, exe)
             run = wrap_calc_Pk(args)
         else:
             print('skip: calculate Pk')
@@ -1312,6 +1326,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> power_spectrum_interp = lim._input_power_spectrum
         >>> power_spectrum_interp(0.1)  # Evaluate the interpolated power spectrum at k = 0.1 [h/Mpc]
         """
+
         input_power_spectrum_filename = os.path.join(
             self.out_dir, "inputs", self.outfile_prefix + "_pk.txt"
         )
@@ -1352,10 +1367,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock()
         >>> lim.load_lognormal_catalog_cpp("lognormal_catalog.bin")
         """
-        self.catalog_filename, N_gal_lognormal = transform_bin_to_h5(bin_filename)
+
+        self.catalog_filename, N_gal_lognormal = transform_bin_to_h5(
+            bin_filename)
         logging.info("Done transforming the bin to h5 file.")
         self.cat = self.read_galaxy_catalog(self.catalog_filename)
-        logging.info(f"N_gal mismatch? {N_gal_lognormal}, {len(self.cat['Position'])}")
+        logging.info(
+            f"N_gal mismatch? {N_gal_lognormal}, {len(self.cat['Position'])}")
         assert N_gal_lognormal == len(self.cat["Position"])
         self.cat["RSD_redshift_factor"] = (
             1 + da.dot(self.cat["Velocity"], self.LOS).compute() / const.c
@@ -1381,6 +1399,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock(...)
         >>> power_spectrum = lim.input_power_spectrum(k_values)
         """
+
         return (self._input_power_spectrum(k) * self.Mpch**3).to(self.Mpch**3)
 
     def get_comoving_distance_per_delta_z(self, mean_z, delta_z):
@@ -1404,6 +1423,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> instance = ComovingDistanceCalculator()
         >>> comoving_distance = instance.get_comoving_distance_per_delta_z(mean_z, delta_z)
         """
+
         return self.astropy_cosmo.comoving_distance(
             mean_z + delta_z
         ) - self.astropy_cosmo.comoving_distance(mean_z - delta_z)
@@ -1429,6 +1449,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock()
         >>> delta_z = lim.delta_redshift
         """
+
         axis = np.where(self.LOS == 1)[0]
         if len(axis) != 1:
             raise ValueError("LOS must be [1,0,0] or [0,1,0] or [0,0,1].")
@@ -1470,6 +1491,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock(...)
         >>> lim.assign_redshift_along_axis()
         """
+
         # check if there is a lognormal galaxy catalog yet. Otherwise generate it.
         try:
             self.cat["Position"][0]
@@ -1539,6 +1561,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock()
         >>> lim.assign_single_redshift()
         """
+
         # check if there is a lognormal galaxy catalog yet. Otherwise generate it.
         try:
             self.cat["Position"][0]
@@ -1551,7 +1574,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "Assigning single redshift for the whole box: {}.".format(
                 self.redshift)
         )
-        self.cat["cosmo_redshift"] = self.redshift * np.ones(len(self.cat['RSD_redshift_factor']))
+        self.cat["cosmo_redshift"] = self.redshift * \
+            np.ones(len(self.cat['RSD_redshift_factor']))
         self.delta_redshift = 0.0
         # with RSD
         self.cat["RSD_redshift"] = (
@@ -1561,13 +1585,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.cat["Position"]
             + (
                 (self.cat["Velocity"] * self.LOS)
-                #* u.km
-                #/ u.s
+                # * u.km
+                # / u.s
                 * ((1 + self.cat["cosmo_redshift"])
-                / (self.astropy_cosmo.H(self.cat["cosmo_redshift"])))[:,None]
+                   / (self.astropy_cosmo.H(self.cat["cosmo_redshift"])))[:, None]
             )
             .to(self.Mpch)
-            #.value
+            # .value
         )  # in Mpc / h
         logging.info("Done.")
         return
@@ -1676,6 +1700,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock(...)
         >>> lim.assign_flux()
         """
+
         # check if the galaxies are assigned a redshift.
         try:
             self.cat["cosmo_redshift"][0]
@@ -1742,6 +1767,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> lim = LognormalIntensityMock(...)
         >>> lim.apply_selection_function()
         """
+
         # Check if the galaxies have fluxes, otherwise compute them.
         try:
             self.cat["flux"][0]
@@ -1936,6 +1962,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> with h5py.File(filename, 'r') as F:
         >>>     tab = Table(F)
         """
+
         logging.info(
             "Saving extensions: {} for {} galaxies.".format(
                 keys, galaxy_selection)
@@ -2020,6 +2047,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             If `tracer` argument is not one of the allowed options.
 
         """
+
         galaxy_selection = self.galaxy_selection[tracer]
         # check if the selection function was applied, otherwise apply it.
         if galaxy_selection in ["detected", "undetected"]:
@@ -2059,7 +2087,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )
 
         Vcell_true = (
-            np.product(self.box_size.to(u.Mpc).value / self.N_mesh) * (u.Mpc**3)
+            np.product(self.box_size.to(u.Mpc).value /
+                       self.N_mesh) * (u.Mpc**3)
         ).to(u.Mpc**3)
 
         if tracer == "intensity":  # calculate the intensity mesh
@@ -2202,6 +2231,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         direction. The calculated value depends on the specified rest frame wavelength (lambda_restframe)
         or frequency (nu_restframe), the LOS direction, and the cosmological parameters.
         """
+
         zmid = self.redshift
         if (self.lambda_restframe is not None) and (self.dlambda is not None):
             sigma_par = self.do_spectral_smooth * (
@@ -2234,6 +2264,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         direction. The calculated value depends on the specified redshift, angular diameter distance, angular smoothing length,
         and the cosmological parameters.
         """
+
         zmid = self.redshift
         sigma_perp = self.do_angular_smooth * (
             self.astropy_cosmo.angular_diameter_distance(zmid).to(u.Mpc)
@@ -2260,6 +2291,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         mean_intensity : Quantity
             The mean intensity of the mesh.
         """
+
         logging.info("Calculating mean intensity.")
         mean_intensity = np.mean(
             self.mean_intensity_per_redshift(
@@ -2292,6 +2324,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         field : ndarray
             The generated galaxy number density mesh.
         """
+
         return self.paint_intensity_mesh(
             position=position,
             redshift="cosmo_redshift",
@@ -2311,13 +2344,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -----
         If sigma_noise is not provided, a zero noise cube is returned.
         """
+
         try:
             self.intensity_mesh.shape
         except AttributeError:
             self.paint_intensity_mesh()
 
         logging.info("Getting noise mesh.")
-        
+
         if self.sigma_noise == None:
             self.noise_mesh = da.zeros(self.intensity_mesh.shape)
         else:
@@ -2350,7 +2384,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     loc=0, scale=sigma, size=self.intensity_mesh.shape
                 )
 
-        self.noise_mesh = (noise_mesh * self.mean_intensity).compute().to(self.mean_intensity)
+        self.noise_mesh = (
+            noise_mesh * self.mean_intensity).compute().to(self.mean_intensity)
 
         logging.info("Done.")
         return
@@ -2371,6 +2406,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         sky_intensity_mesh : ndarray
             The computed sky background intensity mesh in units of mean intensity.
         """
+
         zmid = self.redshift
         global tophat_size
         global LOS
@@ -2419,6 +2455,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         indep : ndarray (bool)
             Indicates whether the mode is independent or not.
         """
+
         logging.info("Getting k_spec...")
         nx, ny, nz = self.N_mesh
         lx, ly, lz = self.box_size.to(self.Mpch).value
@@ -2458,6 +2495,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         quadrupole : ndarray
             The quadrupole component of the power spectrum.
         """
+
         k_bins = np.linspace(self.kmin, self.kmax, self.nkbin + 1)
         kspec = np.concatenate(np.concatenate(self.kspec))
         muspec = np.concatenate(np.concatenate(self.muspec))
@@ -2491,6 +2529,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         prepared_intensity_mesh_ft : :class:`pyfftw.interfaces.numpy_fft.fftn.FFTWArray`
             The prepared intensity map in Fourier space after applying the necessary transformations.
         """
+
         intensity_map = self.intensity_mesh
         weights_im = self.mean_intensity  # _per_redshift_mesh
         intensity_map_to_use = make_map(
@@ -2547,6 +2586,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> instance = GalaxyCatalog()
         >>> prepared_n_gal_mesh_ft = instance._get_prepared_n_gal_mesh()
         """
+
         try:
             galaxy_map = self.n_gal_mesh
         except AttributeError:
@@ -2557,16 +2597,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             :, None, None]
         galaxy_map = (self.n_gal_mesh / mean_ngal_per_z).to(1) - 1.
         galaxy_map_to_use = make_map(galaxy_map,
-                                 Nmesh=self.N_mesh,
-                                 BoxSize=self.box_size.to(self.Mpch).value,
-                                 )
+                                     Nmesh=self.N_mesh,
+                                     BoxSize=self.box_size.to(self.Mpch).value,
+                                     )
 
         if self.obs_mask is not None:
             galaxy_map_to_use = galaxy_map_to_use * self.obs_mask
 
         self.prepared_n_gal_mesh_ft = galaxy_map_to_use.r2c()
         return
-    
+
     def prepare_k_values(self):
         """ Prepares the dimensionless k values for the power spectrum calculations."""
         try:
@@ -2709,7 +2749,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     logging.info(
                         f"Overwriting {tracer} in file {outfilename}.")
                 grp = ff.create_group(tracer)
-                ff[f"{tracer}/monopole"] = monopole 
+                ff[f"{tracer}/monopole"] = monopole
                 ff[f"{tracer}/quadrupole"] = quadrupole
                 ff[f"{tracer}/mean_k"] = mean_k
                 for key in ["monopole", "quadrupole"]:
@@ -2737,6 +2777,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         save_to_self : bool, optional
             Save mesh_position to self.mesh_position. Default: True.
         """
+
         logging.info("Getting mesh positions.")
 
         position = np.transpose(
@@ -2775,10 +2816,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Calculates the mean intensity or the mean galaxy number density that we would expect
         at a given redshift of a given galaxy population (either all or detected/undetected galaxies).
         We use the integrals
-        \bar{\rho}_L(z) &= \int_{L_\mathrm{min}}^{L_\mathrm{max}} dL\, \frac{\mathrm{d}n}{\mathrm{d}L} L
-        \bar{I}_\lambda(z) = \frac{c \bar{\rho}_L(z)}{4 \pi \lambda_0 H(z)}
+        $$\\bar{\\rho}_L(z) &= \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L} L$$
+        $\\bar{I}_\\lambda(z) = \\frac{c \\bar{\\rho}_L(z)}{4 \pi \lambda_0 H(z)}$
         and
-        \bar{n}_\mathrm{gal}(z) &= \int_{L_\mathrm{min}}^{L_\mathrm{max}} dL\, \frac{\mathrm{d}n}{\mathrm{d}L},
+        $\\bar{n}_\\mathrm{gal}(z) &= \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L}$,
         where
         Lmin = self.Lmin for all galaxies or undetected galaxies
                self.min_flux(z) * 4 * np.pi * D_L**2 for detected galaxies
@@ -2802,6 +2843,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             List/array of the mean intensity per redshift (if tracer=='intensity') or mean galaxy number density
             per redshift (if tracer=='n_gal'). Same shape as input redshifts array.
         """
+
         logging.info("Getting mean {} of {} galaxies.".format(
             tracer, galaxy_selection))
         if tracer not in ["intensity", "n_gal"]:
@@ -3014,7 +3056,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             position = "Position"
             rsd_ext = "realspace"
-        
+
         if self.run_pk['intensity'] or self.run_pk['cross'] or self.run_pk['sky_subtracted_intensity'] or self.run_pk['sky_subtracted_cross']:
             self.paint_intensity_mesh(position=position)
             self.get_intensity_noise_cube()

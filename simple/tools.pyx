@@ -5,6 +5,7 @@ def catalog_to_mesh_cython(Positions,
                             Weights,
                             N_mesh,
                             Box_Size):
+    """ NGP assignment of galaxies with weights (e.g. intensity) to a mesh."""
     cdef double[:,:,:] mesh
     mesh = np.zeros(N_mesh, dtype=float)
     voxel_size = Box_Size / N_mesh
@@ -19,6 +20,7 @@ def catalog_to_mesh_cython(Positions,
     return mesh
 
 def getindep_cython(nx, ny, nz):
+    """ From https://github.com/cblakeastro/intensitypower/tree/master."""
     indep = np.full((nx, ny, nz // 2 + 1), False, dtype=bool)
     indep[:, :, 1: nz // 2] = True
     indep[1: nx // 2, :, 0] = True
@@ -38,7 +40,7 @@ def getindep_cython(nx, ny, nz):
 
 def get_kspec_cython(int nx, int ny, int nz, float lx, float ly, float lz, dohalf=True, doindep=True):
     """
-    docstring
+    Getting the wavenumber vectors k, their parallel and perpendicular components, their norm, and mu. From https://github.com/cblakeastro/intensitypower/tree/master.
     """
     kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=lx / nx)
     ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=ly / ny)
