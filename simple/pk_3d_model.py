@@ -6,13 +6,7 @@ from scipy.interpolate import interp1d
 import functools
 import logging
 from scipy.integrate import quad
-from scipy.stats import binned_statistic_2d, binned_statistic
-from scipy.special import legendre
 import h5py
-from nbodykit.algorithms.fftpower import project_to_basis
-import pmesh
-import sys
-import os
 
 from simple.lognormal_im_module import (
     print_memory_usage,
@@ -211,24 +205,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Done")
 
         return kspec, muspec, indep
-
-    def bin_nbodykit(self, pkspec):
-        logging.info("Binning using project_to_basis from nbodykit.")
-        pkspec = make_map(
-            pkspec[:, :, :513],
-            self.N_mesh,
-            self.box_size.to(self.Mpch).value,
-            type="complex",
-        )
-        edges = [
-            np.linspace(self.kmin, self.kmax, self.nkbin + 1),
-            np.linspace(-1, 1, self.N_mu + 1),
-        ]
-        result, pole_result = project_to_basis(
-            pkspec, edges, poles=[0, 2, 4], los=[1, 0, 0]
-        )
-        logging.info("Done")
-        return result, pole_result
 
     def get_3d_pk_model(
         self,

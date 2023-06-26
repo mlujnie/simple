@@ -19,10 +19,6 @@ from astropy.table import Table
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 
-from nbodykit.lab import FFTPower, LogNormalCatalog
-from nbodykit.lab import cosmology as nb_cosmology
-from nbodykit.source.catalog import HDFCatalog
-
 from simple.run_module import *
 from simple.lognormal_im_module import (
     transform_bin_to_h5,
@@ -39,7 +35,7 @@ from simple.tools import get_kspec_cython
 def aniso_filter(k, v):
     """
     Filter for k_perp and k_par modes separately.
-    Applies to an nbodykit mesh object as a regular filter.
+    Applies to an pmesh mesh object as a regular filter.
 
     Uses globally defined variables:
         sigma_perp - 'angular' smoothing in the flat sky approximation
@@ -77,7 +73,7 @@ def aniso_filter(k, v):
 def aniso_filter_gaussian(k, v):
     """
     Filter for k_perp and k_par modes separately.
-    Applies to an nbodykit mesh object as a regular filter.
+    Applies to an pmesh mesh object as a regular filter.
 
     Uses globally defined variables:
         sigma_perp - 'angular' smoothing in the flat sky approximation
@@ -114,7 +110,7 @@ def aniso_filter_gaussian(k, v):
 def angular_tophat_filter(k, v):
     """
     Top-hat filter for k_perp.
-    Applies to an nbodykit mesh object as a regular filter.
+    Applies to an pmesh mesh object as a regular filter.
 
     Uses globally defined variables:
         size_perp - 'angular' size of the top-hat filter in the flat sky approximation
@@ -151,7 +147,7 @@ class LognormalIntensityMock:
     box_size: float or array-like
         Length of the box sides in Mpc/h, either one number (cube) or list of three ([Lx, Ly, Lz]).
     N_mesh: float or array-like
-        Mesh number (input for nbodykit lognormal generation).
+        Mesh number (input for lognormal generation).
     Lmin: float
         Minimum luminosity to cut off the luminosity function.
     Lmax: float (optional)
@@ -166,7 +162,7 @@ class LognormalIntensityMock:
         Ideally the luminosity and luminosity function should be normalized
         such that the numbers in the integration don't overflow, e.g. divide all luminosities
         (including Lmin & Lmax) by 1e42 erg/s (for Lyman-alpha)
-    cosmology: nbodykit cosmology object
+    cosmology: varies, see documentation. # TODO: write this up.
         Input cosmology.
     verbose: bool
         If True, you get some extra prints for debugging or so.
@@ -191,7 +187,7 @@ class LognormalIntensityMock:
     ----------
     n_bar_gal : float
         Mean galaxy number density given the luminosity function and min./max. luminosity.
-    cat: nbodykit Catalog object
+    cat: dict
         Catalog of galaxies. Here are the different columns:
             Position (float): position in the box in Mpc/h.
             Velocity (float): velocity in km/s.
@@ -204,10 +200,8 @@ class LognormalIntensityMock:
             detected (bool): whether each galaxy is above the flux limit.
     N_gal: float
         Number of galaxies in the lognormal realization.
-    nbody_cosmo: nbodykit cosmology object
-        Same as the input cosmology.
     astropy_cosmo: astropy cosmology object
-        Astropy cosmology object generated from nbodykit cosmology object.
+        Astropy cosmology object.
     delta_redshift: float
         0.5 times the length of the box along the LOS in redshift.
     Mpch: astropy quantity
@@ -312,8 +306,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         elif isinstance(cosmology, dict):
             self.astropy_cosmo = FlatwCDM(**cosmology)
             print("MNU: ", self.astropy_cosmo.m_nu)
-        elif type(cosmology) == nb_cosmology.cosmology.Cosmology:
-            self.astropy_cosmo = cosmology.to_astropy()
         else:
             self.astropy_cosmo = cosmology
 
@@ -763,14 +755,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         >>> catalog = instance.read_galaxy_catalog(catalog_filename)
         """
         logging.info(f"Initializing catalog from file {catalog_filename}.")
-        # cat = HDFCatalog(catalog_filename)
         with h5py.File(catalog_filename, "r") as ff:
             cat = {}
             for cat_key in ff.keys():
                 if cat_key in ["L_box", "N_gal"]:
                     continue
                 cat[cat_key] = np.array(ff[cat_key][:])
-                # logging.info(cat_key + " " + str(ff[cat_key].attrs.keys()))
                 if "unit" in ff[cat_key].attrs.keys():
                     logging.info(cat_key + " " + ff[cat_key].attrs["unit"])
                     try:
@@ -898,11 +888,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     ff[key] = getattr(self, key)
 
                 # save catalog
-                elif (
-                    isinstance(getattr(self, key), LogNormalCatalog)
-                    or isinstance(getattr(self, key), Table)
-                    or isinstance(getattr(self, key), HDFCatalog)
-                ):
+                elif isinstance(getattr(self, key), Table):
                     continue
 
                 # ignore easily derived attributes

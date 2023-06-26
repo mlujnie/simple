@@ -19,6 +19,5 @@
     * h5py
     * dask
     * pmesh
-    * nbodykit 
 * Status of the code and how it is maintained
 * License \check
