@@ -64,3 +64,22 @@ def get_kspec_cython(int nx, int ny, int nz, float lx, float ly, float lz, dohal
     k_perp = kspec * np.sqrt(1 - muspec**2)
 
     return kspec, muspec, indep, kx, ky, kz, k_par, k_perp
+
+def downsample_mask(old_array, long nx, long ny, long nz):
+    cdef long[:] new_shape
+    new_shape = np.array([nx // 2, ny//2, nz//2])
+    cdef double[:,:,:] new_array
+    new_array = np.zeros(new_shape, dtype=float)
+    for i in range(new_shape[0]):
+        for j in range(new_shape[1]):
+            for k in range(new_shape[2]):
+                new_array[i,j,k] = old_array[2*i,2*j,2*k] \
+                                    + old_array[2*i,2*j,2*k+1] \
+                                    + old_array[2*i,2*j+1,2*k] \
+                                    + old_array[2*i,2*j+1,2*k+1] \
+                                    + old_array[2*i+1,2*j,2*k] \
+                                    + old_array[2*i+1,2*j,2*k+1] \
+                                    + old_array[2*i+1,2*j+1,2*k] \
+                                    + old_array[2*i+1,2*j+1,2*k+1]
+                #sum(old_array[2*i:2*i+2, 2*j:2*j+2, 2*k:2*k+2])
+    return new_array
