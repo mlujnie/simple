@@ -350,9 +350,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_k,
             monopole,
             quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
         ) = self.bin_scipy(model.real)
 
         if save:
@@ -367,7 +364,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 ff[f"{tracer}/P_shot"] = P_shot_smoothed.to(self.Mpch**3).value
                 ff[f"{tracer}/S_bar"] = (S_bar * box_volume).to(self.Mpch**3).value
                 logging.info("Done")
-                return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
+                return mean_k, monopole, quadrupole
 
     def model_shot_noise(self, N_real=10):
         N_gal = int((self.n_bar_gal * self.box_volume).to(1))
@@ -695,9 +692,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_k,
             monopole,
             quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
         ) = self.get_3d_pk_model(
             damping_function,
             P_shot_smoothed,
@@ -712,7 +706,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             tracer=tracer,
         )
         logging.info("Done.")
-        return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
+        return mean_k, monopole, quadrupole
 
     def get_n_gal_model(self):
         """
@@ -744,9 +738,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_k,
             monopole,
             quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
         ) = self.get_3d_pk_model(
             damping_function,
             P_shot_smoothed,
@@ -760,7 +751,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             save=True,
             tracer="n_gal",
         )
-        return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
+        return mean_k, monopole, quadrupole
 
     def get_cross_model(self, sky_subtraction=False):
         """
@@ -806,9 +797,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_k,
             monopole,
             quadrupole,
-            mean_k_2d,
-            mean_mu_2d,
-            P_k_mu,
         ) = self.get_3d_pk_model(
             damping_function,
             P_shot_cross,
@@ -823,7 +811,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             save=True,
             tracer=tracer,
         )
-        return mean_k, monopole, quadrupole, mean_k_2d, mean_mu_2d, P_k_mu
+        return mean_k, monopole, quadrupole
 
     def get_model(self, tracer):
         if tracer == "intensity":

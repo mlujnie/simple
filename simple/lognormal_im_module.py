@@ -120,22 +120,34 @@ def get_checker_mask(N_mesh, N_cells=1):
     obs_mask = np.array([obs_mask_2d for i in range(N_mesh[0])])
     return obs_mask
 
-def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None, lmax=2):
-    if two_d:
-        P_k_mu, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
-            kspec, muspec, pkspec, bins=[k_bins, mu_bins], statistic="mean"
-        )
-        logging.info("Calculated P_k_mu.")
-        mean_k_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
-            kspec, muspec, kspec, bins=[k_bins, mu_bins], statistic="mean"
-        )
-        logging.info("Calculated mean k (2d).")
-        mean_mu_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
-            kspec, muspec, muspec, bins=[k_bins, mu_bins], statistic="mean"
-        )
-        logging.info("Calculated mean mu (2d).")
-    else:
-        P_k_mu, mean_k_2d, mean_mu_2d = None, None, None
+def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2):
+    """
+    Calculates the monopole and quadrupole (if lmax==2) power spectrum and mean k in the given k bins.
+
+    Parameters
+    ----------
+    pkspec : array-like (3D)
+        Array of power spectrum values.
+    k_bins : array-like (1D)
+        Array of bin edges for the k values.
+    kspec : array-like (3D)
+        Array of k values corresponding to the power spectrum.
+    muspec : array-like (3D)
+        Array of mu values corresponding to the power spectrum.
+    lmax : int, optional
+        Maximum multipole moment to calculate. 
+        Options: 1, 2
+        Default: 2.
+
+    Returns
+    -------
+    mean_k : ndarray
+        Mean k values in each k bin.
+    monopole : ndarray
+        Mean monopole power spectrum in each k bin.
+    quadrupole : ndarray (or None if lmax==1)
+        Mean quadrupole power spectrum in each k bin.
+    """
 
     monopole, k_edge, bin_number = binned_statistic(
         kspec, pkspec, bins=k_bins, statistic="mean"
@@ -160,9 +172,6 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, two_d=False, mu_bins=None, lmax=2):
         mean_k,
         monopole,
         5 * quadrupole,
-        mean_k_2d,
-        mean_mu_2d,
-        P_k_mu,
     )
 
 def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
@@ -171,6 +180,23 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     )
     logging.info("Calculated P_k_2d.")
     return P_k_2d
+
+def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
+    P_k_mu, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
+        kspec, muspec, pkspec, bins=[k_bins, mu_bins], statistic="mean"
+    )
+    logging.info("Calculated P_k_mu.")
+    mean_k_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
+        kspec, muspec, kspec, bins=[k_bins, mu_bins], statistic="mean"
+    )
+    logging.info("Calculated mean k (2d).")
+    mean_mu_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
+        kspec, muspec, muspec, bins=[k_bins, mu_bins], statistic="mean"
+    )
+    logging.info("Calculated mean mu (2d).")
+    return (mean_k_2d,
+        mean_mu_2d,
+        P_k_mu,)
 
 
 def jinc(x):

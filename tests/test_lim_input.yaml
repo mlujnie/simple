@@ -33,8 +33,7 @@ footprint_radius : '9 * u.arcmin'
 run_pk :
   intensity : True 
   n_gal : True 
-  cross : True 
-N_mu : 1
+  cross : True
 dk : 0.04 
 kmin : 0.04
 kmax : 1.
