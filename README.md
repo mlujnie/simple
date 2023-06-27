@@ -1,7 +1,7 @@
 # Simple Intensity Map Producer for Line Emission (SIMPLE)
 
 ## Setup
-* install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/: `git clone -b intensity-mapping git@bitbucket.org:komatsu5147/lognormal_galaxies.git`
+* install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/: `git clone -b intensity-mapping git clone -b intensity-mapping https://bitbucket.org/komatsu5147/lognormal_galaxies/`
 * clone this repo 
     `git clone https://github.com/mlujnie/simple`
 * modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
