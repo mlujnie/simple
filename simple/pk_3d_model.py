@@ -35,9 +35,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     """
 
     def __init__(
-        self, input_dict, cosmology=None, luminosity_function=None, do_model_shot_noise=None, out_filename=None
+        self, input_dict, do_model_shot_noise=None, out_filename=None
     ):
-        LognormalIntensityMock.__init__( self, input_dict=input_dict, cosmology=cosmology, luminosity_function=luminosity_function)
+        LognormalIntensityMock.__init__( self, input_dict=input_dict)
         self.own_init(do_model_shot_noise, out_filename)
                     
     @classmethod
