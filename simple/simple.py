@@ -2144,6 +2144,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Signal : {}".format(signal))
         logging.info("Min signal: {}".format(np.min(signal)))
 
+        logging.info(f"IMPORTANT: {self.cat[position][mask].to(self.Mpch).shape=}, { signal.shape=}, {self.N_mesh=}")
+
         field = catalog_to_mesh_cython(
             self.cat[position][mask].to(self.Mpch).value,
             signal.value.astype(float),

@@ -9,11 +9,15 @@ def catalog_to_mesh_cython(Positions,
     cdef double[:,:,:] mesh
     mesh = np.zeros(N_mesh, dtype=float)
     voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
     N_gal = np.shape(Positions)[0]
     for i in range(N_gal):
         ix = int(np.floor(Positions[i,0] / voxel_size[0]))
         iy = int(np.floor(Positions[i,1] / voxel_size[1]))
         iz = int(np.floor(Positions[i,2] / voxel_size[2]))
+        ix = min([ix, N_mesh[0]-1])
+        iy = min([iy, N_mesh[1]-1])
+        iz = min([iz, N_mesh[2]-1])
         mesh[ix, iy, iz] += Weights[i]
         if i % 100000 == 0:
             print("Finished {}/{}.".format(i+1, N_gal))
