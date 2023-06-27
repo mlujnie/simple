@@ -520,14 +520,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         LognormalIntensityMock
             A new instance of LognormalIntensityMock with the same input parameters as the original.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> mock = LognormalIntensityMock()
-        >>> new_mock = mock.copy_info()
         """
 
         logging.info("Copying LognormalIntensityMap input information.")
@@ -552,9 +544,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         dict
             The modified input dictionary with the evaluated strings.
 
-        Raises
-        ------
-        None.
         """
 
         for key in data.keys():
@@ -600,14 +589,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         LognormalIntensityMock
             A new instance of LognormalIntensityMock initialized from the saved file.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> filename = "mock_data.hdf5"
-        >>> instance = LognormalIntensityMock.from_file(filename)
         """
 
         level = logging.INFO
@@ -749,15 +730,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         dict
             A dictionary containing the galaxy catalog data.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> instance = LognormalIntensityMock()
-        >>> catalog_filename = "galaxy_catalog.h5"
-        >>> catalog = instance.read_galaxy_catalog(catalog_filename)
         """
 
         logging.info(f"Initializing catalog from file {catalog_filename}.")
@@ -795,20 +767,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             The filename of the galaxy catalog file to save (default is None).
             If None, it does not save the galaxy catalog.
 
-        Returns
-        -------
-        None.
-
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> instance = LognormalIntensityMock()
-        >>> filename = "lim_instance.h5"
-        >>> catalog_filename = "lim_catalog.h5"
-        >>> instance.save_to_file(filename, catalog_filename=catalog_filename)
         """
 
         attributes = []
@@ -971,14 +929,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ndarray or astropy Quantity array
             The downsampled mesh.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> new_N_mesh = [16, 16, 16]
-        >>> lim._downsample_mesh(lim.n_gal_mesh, new_N_mesh)
         """
 
         try:
@@ -1004,20 +954,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         new_N_mesh : list of int (len 3)
             The new grid resolution for downsampling.
 
-        Returns
-        -------
-        None.
-
-        Raises
-        ------
-        AssertionError
-            If the elements of new_N_mesh are not integers.
-
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> new_N_mesh = [64, 64, 64]
-        >>> lim.downsample_all_meshes(new_N_mesh)
         """
 
         assert isinstance(new_N_mesh[0], int)
@@ -1090,14 +1026,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             The expected mean galaxy number density in units of 1/Mpc**3,
             not taking into account the selection function.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.n_bar_gal
         """
 
         logging.info("Getting mean galaxy number density.")
@@ -1165,15 +1093,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Returns
         -------
         None.
-
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.run_lognormal_simulation_cpp()
 
         """
 
@@ -1316,15 +1235,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         callable
             Interpolation function for the input power spectrum.
 
-        Raises
-        ------
-        None.
-
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock()
-        >>> power_spectrum_interp = lim._input_power_spectrum
-        >>> power_spectrum_interp(0.1)  # Evaluate the interpolated power spectrum at k = 0.1 [h/Mpc]
         """
 
         input_power_spectrum_filename = os.path.join(
@@ -1362,10 +1272,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         AssertionError
             If the number of galaxies in the lognormal catalog does not match the number of positions in the loaded catalog.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock()
-        >>> lim.load_lognormal_catalog_cpp("lognormal_catalog.bin")
         """
 
         self.catalog_filename, N_gal_lognormal = transform_bin_to_h5(
@@ -1394,10 +1300,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Quantity
             Power spectrum values in units of [Mpc^3/h^3].
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> power_spectrum = lim.input_power_spectrum(k_values)
         """
 
         return (self._input_power_spectrum(k) * self.Mpch**3).to(self.Mpch**3)
@@ -1418,10 +1320,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Quantity
             Comoving distance between (z + delta_z) and (z - delta_z).
 
-        Examples
-        --------
-        >>> instance = ComovingDistanceCalculator()
-        >>> comoving_distance = instance.get_comoving_distance_per_delta_z(mean_z, delta_z)
         """
 
         return self.astropy_cosmo.comoving_distance(
@@ -1444,10 +1342,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ValueError
             If the LOS is not aligned with any of the axes [1,0,0], [0,1,0], or [0,0,1].
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock()
-        >>> delta_z = lim.delta_redshift
         """
 
         axis = np.where(self.LOS == 1)[0]
@@ -1486,10 +1380,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -----
         This function requires a lognormal galaxy catalog. If the catalog does not exist, it will generate it using lognormal simulations.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.assign_redshift_along_axis()
         """
 
         # check if there is a lognormal galaxy catalog yet. Otherwise generate it.
@@ -1556,10 +1446,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function requires a lognormal galaxy catalog.
         If the catalog does not exist, it will generate it using lognormal simulations.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock()
-        >>> lim.assign_single_redshift()
         """
 
         # check if there is a lognormal galaxy catalog yet. Otherwise generate it.
@@ -1616,10 +1502,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function requires a lognormal galaxy catalog. 
         If the catalog does not exist, it will generate it using lognormal simulations.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.assign_luminosity()
         """
 
         # check if there is a lognormal galaxy catalog yet. Otherwise generate it.
@@ -1695,10 +1577,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function requires the galaxies to have assigned redshifts.
         If the redshifts are not assigned, they will be assigned using either a single redshift or redshift along the LOS.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.assign_flux()
         """
 
         # check if the galaxies are assigned a redshift.
@@ -1762,10 +1640,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -----
         This function requires the galaxies to have assigned fluxes. If the fluxes are not assigned, they will be computed using the `assign_flux()` method.
 
-        Examples
-        --------
-        >>> lim = LognormalIntensityMock(...)
-        >>> lim.apply_selection_function()
         """
 
         # Check if the galaxies have fluxes, otherwise compute them.
@@ -2144,8 +2018,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Signal : {}".format(signal))
         logging.info("Min signal: {}".format(np.min(signal)))
 
-        logging.info(f"IMPORTANT: {self.cat[position][mask].to(self.Mpch).shape=}, { signal.shape=}, {self.N_mesh=}")
-
         field = catalog_to_mesh_cython(
             self.cat[position][mask].to(self.Mpch).value,
             signal.value.astype(float),
@@ -2232,6 +2104,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function calculates the comoving distance corresponding to the smoothing length along the line-of-sight (LOS)
         direction. The calculated value depends on the specified rest frame wavelength (lambda_restframe)
         or frequency (nu_restframe), the LOS direction, and the cosmological parameters.
+
         """
 
         zmid = self.redshift
@@ -2265,6 +2138,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function calculates the comoving distance corresponding to the smoothing length perpendicular to the line-of-sight (LOS)
         direction. The calculated value depends on the specified redshift, angular diameter distance, angular smoothing length,
         and the cosmological parameters.
+
         """
 
         zmid = self.redshift
@@ -2292,6 +2166,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -------
         mean_intensity : Quantity
             The mean intensity of the mesh.
+
         """
 
         logging.info("Calculating mean intensity.")
@@ -2325,6 +2200,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -------
         field : ndarray
             The generated galaxy number density mesh.
+
         """
 
         return self.paint_intensity_mesh(
@@ -2345,6 +2221,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Notes
         -----
         If sigma_noise is not provided, a zero noise cube is returned.
+
         """
 
         try:
@@ -2407,6 +2284,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -------
         sky_intensity_mesh : ndarray
             The computed sky background intensity mesh in units of mean intensity.
+
         """
 
         zmid = self.redshift
@@ -2456,6 +2334,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             The corresponding values of mu (cosine of the angle between the LOS and the wavevector k).
         indep : ndarray (bool)
             Indicates whether the mode is independent or not.
+
         """
 
         logging.info("Getting k_spec...")
@@ -2496,6 +2375,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             The monopole component of the power spectrum.
         quadrupole : ndarray
             The quadrupole component of the power spectrum.
+
         """
 
         k_bins = np.linspace(self.kmin, self.kmax, self.nkbin + 1)
@@ -2530,6 +2410,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         -------
         prepared_intensity_mesh_ft : :class:`pyfftw.interfaces.numpy_fft.fftn.FFTWArray`
             The prepared intensity map in Fourier space after applying the necessary transformations.
+
         """
 
         intensity_map = self.intensity_mesh
@@ -2583,10 +2464,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         This function prepares the galaxy number density map for analysis by performing normalization, subtracting the mean
         galaxy number density per redshift, and applying an observation mask.
 
-        Examples
-        --------
-        >>> instance = GalaxyCatalog()
-        >>> prepared_n_gal_mesh_ft = instance._get_prepared_n_gal_mesh()
         """
 
         try:
@@ -2646,6 +2523,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Array of monopole power spectrum values.
         quadrupole : array_like
             Array of quadrupole power spectrum values.
+
         """
 
         logging.info(f"Getting power spectrum multipoles of {tracer}.")
@@ -2778,6 +2656,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Number of cells in each dimension (dimensionless array).
         save_to_self : bool, optional
             Save mesh_position to self.mesh_position. Default: True.
+
         """
 
         logging.info("Getting mesh positions.")
@@ -2844,6 +2723,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         mean_intensity_per_redshift: Quantity array (n,)
             List/array of the mean intensity per redshift (if tracer=='intensity') or mean galaxy number density
             per redshift (if tracer=='n_gal'). Same shape as input redshifts array.
+
         """
 
         logging.info("Getting mean {} of {} galaxies.".format(
@@ -3038,6 +2918,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         If `save_meshes` is True, the generated intensity and galaxy meshes will be saved to file.
 
         If `save_results` is True (default), the computed power spectra will be saved to file.
+        
         """
 
         if not skip_lognormal:
