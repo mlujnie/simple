@@ -523,7 +523,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             voxel_length = input_dict["voxel_length"]
             if isinstance(voxel_length, str):
                 voxel_length = eval(voxel_length)
-            voxel_length = np.array(voxel_length)
             self.N_mesh = (
                 (self.box_size / voxel_length).to(1).value).astype(int)
             # get the exact voxel length because N_mesh has to be an integer.
