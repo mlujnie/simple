@@ -867,10 +867,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     for small_key in ff[key].attrs.keys():
                         input_dict[key][small_key] = ff[key].attrs[small_key]
 
+            input_dict['cosmology'] = astropy_cosmo
+            input_dict['luminosity_function'] = luminosity_function_table
+
             logging.info("Initializing LognormalIntensityMock instance.")
-            new_lim_instance = cls(
-                input_dict, astropy_cosmo, luminosity_function_table
-            )
+            new_lim_instance = cls(input_dict)
 
             if not only_params:
                 # load meshes
