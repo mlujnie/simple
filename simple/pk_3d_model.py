@@ -24,7 +24,7 @@ def kaiser_pkmu(Plin, k, mu, bias, f_growth):
 
     .. math::
 
-        P(k,mu) = (1 + f/b_1 mu^2)^2 b_1^2 P_\mathrm{lin}(k)
+        P(k,mu) = (1 + f/b_1 \mu^2)^2 b_1^2 P_\mathrm{lin}(k)
 
     Copied from nbodykit.
 
@@ -34,7 +34,24 @@ def kaiser_pkmu(Plin, k, mu, bias, f_growth):
 
 class Power_Spectrum_Model(LognormalIntensityMock):
     """
-    Doc - string.
+    Power_Spectrum_Model class. 
+    Models the intensity/galaxy/cross power spectrum of a LognormalIntensityMock instance
+    with the same input parameters as that.
+
+    Parameters
+    ----------
+    input_dict:
+        Input parameters for the LognormalIntensityMock instance, see simple.py.
+    do_model_shot_noise: bool
+        Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
+        Default is None/False.
+    out_filename: str
+        Name of the file to save the model power spectra to (hdf5 format).
+
+    Notes
+    -----
+    The general model is explained in the paper.
+
     """
 
     def __init__(
