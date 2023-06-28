@@ -5,7 +5,28 @@ def catalog_to_mesh_cython(Positions,
                             Weights,
                             N_mesh,
                             Box_Size):
-    """ NGP assignment of galaxies with weights (e.g. intensity) to a mesh."""
+
+    """
+    NGP assignment of galaxies with weights (e.g. intensity) to a mesh.
+
+    Parameters:
+    -----------
+    Positions: array-like
+        Array of shape (N_gal, 3) containing the positions of the galaxies.
+    Weights: array-like
+        Array of shape (N_gal,) containing the weights (e.g., intensity) of the galaxies.
+    N_mesh: tuple
+        Tuple of three integers (N_x, N_y, N_z) specifying the dimensions of the mesh.
+    Box_Size: array-like
+        Size of the box enclosing the mesh, array of shape (3,).
+
+    Returns:
+    --------
+    mesh: ndarray
+        Array of shape (N_x, N_y, N_z) representing the mesh with assigned weights.
+
+    """
+
     cdef double[:,:,:] mesh
     mesh = np.zeros(N_mesh, dtype=float)
     voxel_size = Box_Size / N_mesh
@@ -25,6 +46,7 @@ def catalog_to_mesh_cython(Positions,
 
 def getindep_cython(nx, ny, nz):
     """ From https://github.com/cblakeastro/intensitypower/tree/master."""
+
     indep = np.full((nx, ny, nz // 2 + 1), False, dtype=bool)
     indep[:, :, 1: nz // 2] = True
     indep[1: nx // 2, :, 0] = True
@@ -46,6 +68,7 @@ def get_kspec_cython(int nx, int ny, int nz, float lx, float ly, float lz, dohal
     """
     Getting the wavenumber vectors k, their parallel and perpendicular components, their norm, and mu. From https://github.com/cblakeastro/intensitypower/tree/master.
     """
+
     kx = 2.0 * np.pi * np.fft.fftfreq(nx, d=lx / nx)
     ky = 2.0 * np.pi * np.fft.fftfreq(ny, d=ly / ny)
     if dohalf:
@@ -72,6 +95,27 @@ def get_kspec_cython(int nx, int ny, int nz, float lx, float ly, float lz, dohal
     return kspec, muspec, indep, kx, ky, kz, k_par, k_perp
 
 def downsample_mask(old_array, long nx, long ny, long nz):
+    """
+    Downsample a 3D mask array by averaging neighboring elements.
+
+    Parameters:
+    -----------
+    old_array: ndarray
+        Array of shape (nx, ny, nz) representing the original mask.
+    nx: int
+        Number of elements along the x-axis in the original mask.
+    ny: int
+        Number of elements along the y-axis in the original mask.
+    nz: int
+        Number of elements along the z-axis in the original mask.
+
+    Returns:
+    --------
+    new_array: ndarray
+        Array of shape (nx // 2, ny // 2, nz // 2) representing the downsampled mask.
+
+    """
+
     cdef long[:] new_shape
     new_shape = np.array([nx // 2, ny//2, nz//2])
     cdef double[:,:,:] new_array

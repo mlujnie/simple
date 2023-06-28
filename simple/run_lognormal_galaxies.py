@@ -11,6 +11,18 @@ config = Config()
 main_lognormal_path = config.lognormal_galaxies_path
 
 def check_dir_im(params):
+    """
+    Creates the necessary directories for saving output files
+    if they do not already exist.
+
+    Parameters:
+    -----------
+    params: dict
+        Dictionary containing the parameters passed to lognormal_galaxies,
+        including "out_dir" specifying the output directory.
+
+    """
+
     dir_names = [
         params["out_dir"],
         os.path.join(params["out_dir"], "inputs"),
@@ -44,7 +56,7 @@ def check_dir_im(params):
 
 
 class executable:
-    """class for execute commands"""
+    """Class to execute commands"""
 
     def __init__(self, name):
         self.name = name
@@ -60,6 +72,23 @@ class executable:
 
 
 def gen_inputs(params, exe):
+    """
+    Generates the necessary input files for generate_Poisson.
+    First, it runs eisensteinhubaonu/compute_pk to calculate the matter power spectrum from the cosmological parameters.
+    Then it runs compute_xi/compute_xi to calculate the corresponding correlation function.
+    Then it runs compute_pkG/calc_pkG to calculate the Gaussian power spectrum for the galaxy field.
+    Then it runs compute_pkG/calc_pkG to calculate the Gaussian power spectrum for the matter field.
+    Finally it runs compute_pkG/calc_pkG to calculate the Gaussian cross-power spectrum of the galaxy and matter fields.
+
+    Parameters:
+    -----------
+    params: dict
+        Dictionary containing the parameters for lognormal_galaxies.
+    exe: object
+        An executable object used to run the external commands.
+
+    """
+
     # input power spectrum
     params["ofile_eh"] = params["out_dir"] + "/inputs/" + params["ofile_prefix"]
     args = [
@@ -115,7 +144,24 @@ def gen_inputs(params, exe):
 
 def gen_Poisson(i, params, seed1, seed2, seed3, exe):
     """
-    generate galaxy and matter density field
+    Generate galaxy and matter density field and the Poisson-sampled lognormal galaxy catalog
+    using lognormal_galaxies.
+
+    Parameters
+    -----------
+    i: int
+        Number of this realization.
+    params: dict
+        Dictionary containing the input parameters for lognormal_galaxies.
+    seed1: int
+        Seed.
+    seed2: int
+        Seed.
+    seed3: int
+        Seed.
+    exe:
+        Executable object used to run the external commands.
+
     """
     params_tmp = params
     params_tmp["seed1"] = seed1[i]
@@ -173,12 +219,23 @@ def gen_Poisson(i, params, seed1, seed2, seed3, exe):
 
 
 def wrap_gen_Poisson(args):
+    """ Wrapper for gen_Poisson function."""
     return gen_Poisson(*args)
 
 
 def calc_Pk(i, params, exe):
     """
-    calculate galaxy auto power powerspectrum
+    Calls calculate_pk/calc_pk_const_los_ngp function of lognormal_galaxies.
+
+    Parameters
+    ----------
+    i: int
+        Number of this realization.
+    params: dict
+        Dictionary containing input parameters for lognormal_galaxies.
+    exe: 
+        Executable object used to run the external commands.
+
     """
     params_tmp = params
     # input file names
@@ -237,12 +294,23 @@ def calc_Pk(i, params, exe):
 
 
 def wrap_calc_Pk(args):
+    """ Wrapper for the function calc_Pk."""
     return calc_Pk(*args)
 
 
 def calc_cPk(i, params, exe):
     """
-    calculate galaxy-matter power powerspectrum
+    Calls function calculate_cross/calc_cpk_const_los_v2 of lognormal_galaxies to calculate galaxy-matter power spectrum.
+
+    Parameters
+    ----------
+    i: int
+        Number of this realization.
+    params: dict
+        Input parameters for lognormal_galaxies.
+    exe:
+        Executable object used to run the external commands.
+
     """
     params_tmp = params
     # input file names
@@ -311,4 +379,5 @@ def calc_cPk(i, params, exe):
 
 
 def wrap_calc_cPk(args):
+    """ Wrapper for function calc_cPk."""
     return calc_cPk(*args)

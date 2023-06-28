@@ -8,7 +8,7 @@ import logging
 from scipy.integrate import quad
 import h5py
 
-from simple.lognormal_im_module import (
+from simple.tools_python import (
     print_memory_usage,
     transform_bin_to_h5,
     bin_scipy,
@@ -25,6 +25,9 @@ def kaiser_pkmu(Plin, k, mu, bias, f_growth):
     .. math::
 
         P(k,mu) = (1 + f/b_1 mu^2)^2 b_1^2 P_\mathrm{lin}(k)
+
+    Copied from nbodykit.
+
     """
     return (bias + f_growth(k) * mu**2) ** 2 * Plin(k)
 
@@ -50,6 +53,33 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         only_meshes=["noise_mesh", "obs_mask"],
         do_model_shot_noise=None,
         ):
+        """
+        Method to initiate a Power_Spectrum_Model object from a file
+        containing a saved LognormalIntensityMock object.
+
+        Parameters:
+        -----------
+        filename : str
+            Name of the file containing the saved LognormalIntensityMock object.
+        out_filename : str
+            Output filename for the power spectrum results.
+        catalog_filename : str, optional
+            Filename of the catalog associated with the LognormalIntensityMock object.
+        only_params : bool, optional
+            Set to True to load only the parameters and skip loading the meshes.
+        only_meshes : list of str, optional
+            List of specific meshes to load. Default is ["noise_mesh", "obs_mask"].
+        do_model_shot_noise : bool, optional
+            Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
+            Default is None/False.
+
+        Returns:
+        --------
+        instance : Power_Spectrum_Model
+            An instance of the Power_Spectrum_Model class.
+
+        """
+
         instance = super().from_file(filename=filename,
         catalog_filename=catalog_filename,
         only_params=only_params,
@@ -59,6 +89,17 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         return instance
     
     def own_init(self, do_model_shot_noise, out_filename):
+        """
+        Step in initializing the Power_Spectrum_Model instance.
+
+        Parameters:
+        -----------
+        do_model_shot_noise : bool
+            Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
+        out_filename : str
+            Output filename for the power spectrum results.
+
+        """
 
         logging.info("Initializing Power_Spectrum_Model instance.")
         self.do_model_shot_noise = do_model_shot_noise
@@ -111,14 +152,20 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     # get intensity-intensity shot noise
     def luminosity_function_times_Lsq(self, L):
+        """ 
+        Luminosity function times L**2
+
+        """
         return self.luminosity_function_times_L(L) * L
 
     def get_observed_volume(self):
+        """ Returns the observed volume given the mask."""
         observed_volume = np.sum(self.obs_mask) * self.voxel_volume
         self.observed_volume = observed_volume
         return observed_volume
 
     def get_S_bar(self, weight_mesh, sigma_noise):
+        """ Calculates the S_bar value given the weight mesh and the sigma of the Gaussian noise."""
         return (
             np.mean(weight_mesh**2 * sigma_noise**2).to(1)
             * self.voxel_volume
@@ -126,12 +173,14 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         )
 
     def get_Q_bar(self, weight_mesh, mean_intensity_per_redshift_mesh):
+        """ Calculates the Q_bar value given the weight mesh and the mean field as a function of position. """
         return np.mean(weight_mesh**2 * mean_intensity_per_redshift_mesh**2).to(1)
 
     def D_sq_par_of_k(self, k_par, s_par):
         """
         Damping function D^2 for LOS-parallel top-hat smoothing with smoothing length s_par.
         """
+
         if self.do_spectral_tophat_smooth:
             D_sq_par = np.sinc(0.5 * k_par * s_par / np.pi) ** 2
         else:
@@ -142,16 +191,24 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         Damping function D^2 for LOS-perpendicular exponential smoothing with smoothing length s_perp.
         """
+
         D_sq_perp = np.exp(-(k_perp**2) * s_perp**2)
         return D_sq_perp
 
     def D_cic_of_k(self, k, k_N):
+        """
+        Damping function D for cic resampling with the aliasing correction for the shot noise.
+        """
         # D_cic = np.sinc(0.5 * k * H/np.pi)**2 # without aliasing correction
         D_cic = (1 - 2.0 / 3 * np.sin(np.pi * k / (2 * k_N)) ** 2) ** 0.5
         return D_cic
 
     @functools.cached_property
     def D_cic_corr(self):
+        """
+        Damping function D for cic resampling evaluated for this instance as a 3D array.
+        """
+
         D_cic_corr = (
             self.D_cic_of_k(self.kx[:, None, None], self.k_N)
             * self.D_cic_of_k(self.ky[None, :, None], self.k_N)
@@ -160,10 +217,26 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         return D_cic_corr
 
     def D_sq_tophat_of_k(self, k_perp, s_perp_sky):
+        """
+        Damping function D^2 for a spherical top-hat smoothing in the directions perpendicular to the LOS.
+        """
+        
         return (jinc(k_perp * s_perp_sky) * 2) ** 2
 
     @functools.cached_property
     def Pm_kspec(self):
+        """
+        Cached property that returns the galaxy power spectrum Pm_kspec.
+        If self.RSD is True, it will return the Kaiser RSD approximation.
+        Otherwise it will be just the bias squared times the matter power spectrum.
+
+        Returns:
+        --------
+        astropy quantity array
+            The power spectrum Pm_kspec.
+
+        """
+
         logging.info("Getting Pm_kspec...")
         if self.RSD:
             Pm_kspec = (
@@ -179,32 +252,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     @functools.cached_property
     def k_N(self):
+        """ Nyquist frequency in [h/Mpc]."""
         return self.k_Nyquist[0].value
-
-    def get_kspec(self, dohalf=True, doindep=True):
-        """
-        docstring
-        """
-        logging.info("Getting k_spec...")
-        nx, ny, nz = self.N_mesh
-        lx, ly, lz = self.box_size.to(
-            self.Mpch).value
-
-        kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
-            nx, ny, nz, lx, ly, lz, dohalf, doindep
-        )
-
-        self.kspec = kspec
-        self.muspec = muspec
-        self.indep = indep
-        self.k_par = kspec * muspec
-        self.k_perp = kspec * np.sqrt(1 - muspec**2)
-        self.kx = kx
-        self.ky = ky
-        self.kz = kz
-        logging.info("Done")
-
-        return kspec, muspec, indep
 
     def get_3d_pk_model(
         self,
@@ -216,14 +265,52 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         box_volume,
         Pk_unit,
         convolve=True,
-        poles=False,
         mask_window_function_2=None,
         save=True,
         tracer=None,
     ):
         """
-        Calculates 3D P(k) model including smoothing and convolution with the window function
-        and bins it in logarithmic bins.
+        Calculates the 3D power spectrum model P(k) by incorporating smoothing, convolution with the window function,
+        and noise, and bins it in linear k bins.
+
+        Parameters:
+        -----------
+        damping_function : array-like
+            The damping function.
+        P_shot_smoothed : astropy quantity scalar or array
+            The shot noise power spectrum that is subject to smoothing (i.e. not pixel noise) in volume units.
+        S_bar : float
+            The value of S_bar.
+        mask_window_function_1 : array-like
+            The window function: mask times mean field as a function of position.
+        observed_volume : astropy quantity
+            The observed volume in volume units.
+        box_volume : astropy quantity
+            The total box volume in volume units.
+        Pk_unit : astropy unit object
+            The unit of the power spectrum (e.g. u.Unit("u.Mpc**3"))
+        convolve : bool, optional
+            Flag indicating whether to convolve P(k) with the window function squared. 
+            If False, just multiply by Q_bar (mean of the window function squared).
+            Default is True.
+        mask_window_function_2 : array-like, optional
+            The window function for the second field in case of a cross power spectrum.
+            Default: None.
+        save : bool, optional
+            Flag indicating whether to save the results. Default is True.
+        tracer : str, optional
+            Options: n_gal, intensity, cross, sky_subtracted_intensity, sky_subtracted_cross.
+            The tracer label in the saved file. Default is None.
+
+        Returns:
+        --------
+        mean_k
+            Mean k in the k bins.
+        monopole
+            Monopole moment of the binned power spectrum.
+        quadrupole 
+            Quadrupole moment of the binned power spectrum.
+
         """
         logging.info("Getting 3D P(k) model.")
         print_memory_usage()
@@ -343,6 +430,22 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 return mean_k, monopole, quadrupole
 
     def model_shot_noise(self, N_real=10):
+        """
+        Model the shot noise in the intensity and galaxy distributions
+        by shuffling the cells in the directions perpendicular to the LOS
+        while keeping the LOS position fixed (to keep directional information
+        that may exist due to redshift differences).
+        After shuffling, calculate the power spectrum.
+        Finally the model shot noise is given by the average of the power spectra
+        of the shuffled meshes.
+
+        Parameters:
+        -----------
+        N_real : int, optional
+            Number of realizations of shuffled meshes. Default is 10.
+
+        """
+
         N_gal = int((self.n_bar_gal * self.box_volume).to(1))
         intensity_shot_noise_delta_k_sqs = []
         n_gal_shot_noise_delta_k_sqs = []
@@ -483,6 +586,13 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         return
 
     def get_intensity_shot_noise(self):
+        """
+        Calculates the shot noise (from randomly sampling the number of galaxies and the 
+        luminosity of each galaxy), which is subject to smoothing from the second moment
+        of the luminosity function.
+
+        """
+
         if self.galaxy_selection["intensity"] in ["detected", "undetected"]:
             intensity_second_moment = []
             assert (len(self.redshift_mesh_axis) == self.obs_mask.shape[0])
@@ -562,6 +672,14 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         return P_shot
 
     def get_cross_shot_noise(self):
+        """
+        Calculates the shot noise of the cross power spectrum 
+        that originates from randomly sampling the number of galaxies
+        and their luminosity from the first moment of the luminosity function
+        that includes only the galaxies overlapping in both fields.
+        
+        """
+
         galaxy_selections = self.galaxy_selection
 
         if ("detected" in galaxy_selections.values()) and (
@@ -595,6 +713,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     @functools.cached_property
     def mean_intensity_per_redshift_mesh(self):
+        """ Broadcasts the 1D mean_intensity_per_redshift array to the 3D mesh (cached)."""
+
         mean_intensity_per_redshift = self.mean_intensity_per_redshift(
             self.redshift_mesh_axis,
             galaxy_selection=self.galaxy_selection["intensity"],
@@ -606,6 +726,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     @functools.cached_property
     def mean_ngal_per_redshift_mesh(self):
+        """ Broadcasts the 1D mean galaxy number density array to the 3D mesh (cached)."""
+
         mean_ngal_per_redshift = self.mean_intensity_per_redshift(
             self.redshift_mesh_axis,
             tracer="n_gal",
@@ -618,15 +740,25 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     @functools.cached_property
     def weight_mesh_im(self):
+        """ Weights for the intensity mesh: just 1/mean_intensity."""
+
         return (1 / self.mean_intensity).to(1 / self.mean_intensity)
 
     @functools.cached_property
     def weight_mesh_ngal(self):
+        """ Weights for the galaxy density mesh: 1/(mean n_gal as a function of position)."""
         return 1.0 / self.mean_ngal_per_redshift_mesh  # / self.n_bar_gal
 
     def get_intensity_model(self, sky_subtraction=False):
         """
-        Get the power spectrum model for the intensity.
+        Calculate and save the power spectrum model for the intensity.
+
+        Parameters
+        ----------
+        sky_subtraction : bool
+            Set to True if you want the sky_subtracted_intensity.
+            Default: False.
+
         """
         logging.info("Getting intensity model.")
         sigma_noise_im = self.sigma_noise
@@ -677,7 +809,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.box_volume,
             self.Mpch**3,
             convolve=True,
-            poles=True,
             save=True,
             tracer=tracer,
         )
@@ -686,8 +817,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     def get_n_gal_model(self):
         """
-        Get the power spectrum model for the galaxy number density.
+        Calculate and save the power spectrum model for the galaxy number density.
+
         """
+
         logging.info("Getting n_gal model.")
         sigma_noise_ngal = np.sqrt(
             self.mean_ngal_per_redshift_mesh / self.voxel_volume
@@ -723,7 +856,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.box_volume,
             self.Mpch**3,
             convolve=True,
-            poles=True,
             save=True,
             tracer="n_gal",
         )
@@ -731,8 +863,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
     def get_cross_model(self, sky_subtraction=False):
         """
-        Get the power spectrum model for the cross-power spectrum.
+        Calculate and save the power spectrum model for the intensity-galaxy number density cross-power spectrum.
+
+        Parameters
+        ----------
+        sky_subtraction : bool
+            Set to True if you want the sky_subtracted_intensity.
+            Default: False.
+
         """
+
         logging.info("Getting cross model.")
         mean_per_redshift_mesh_im = self.mean_intensity_per_redshift_mesh
         logging.info("Got mean intensity per redshift mesh.")
@@ -782,7 +922,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.box_volume,
             self.Mpch**3,
             convolve=True,
-            poles=True,
             mask_window_function_2=mask_window_function_2,
             save=True,
             tracer=tracer,
@@ -790,6 +929,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         return mean_k, monopole, quadrupole
 
     def get_model(self, tracer):
+        """ 
+        Wrapper to calculate and save the model for each tracer.
+        
+        Parameters
+        ----------
+        tracer : str
+            Tracer name to get the power spectrum model for.
+            Options: "intensity", "n_gal", "cross", "sky_subtracted_intensity", "sky_subtracted_cross".
+
+        """
         if tracer == "intensity":
             return self.get_intensity_model()
         elif tracer == "n_gal":
@@ -804,6 +953,11 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             raise ValueError("Tracer must be intensity, n_gal, or cross.")
 
     def get_models(self):
+        """
+        Wrapper to calculate and save all specified power spectrum models 
+        here self.run_pk[tracer] is True.
+
+        """
         if self.run_pk["intensity"]:
             self.get_model(tracer="intensity")
         if self.run_pk["n_gal"]:

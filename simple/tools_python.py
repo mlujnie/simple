@@ -12,10 +12,29 @@ from scipy.special import legendre, j1
 from scipy.interpolate import interp1d
 
 def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolate'):
-    '''
-    Logarithmic interpolation accepting linear quantities as input (transformed
-    within the function)
-    '''
+    """
+    Logarithmic interpolation accepting linear quantities as input (transformed within the function).
+
+    Parameters
+    ----------
+    xx : array-like
+        Array of x values.
+    yy : array-like
+        Array of y values.
+    kind : str, optional
+        Specifies the kind of interpolation. Default is 'linear'.
+    bounds_error : bool, optional
+        If True, raise an error when attempting to interpolate outside the bounds of the input data. Default is False.
+    fill_value : str or numeric, optional
+        Specifies the value to use for points outside the bounds of the input data when bounds_error is False. Default is 'extrapolate'.
+
+    Returns
+    -------
+    callable
+        A callable function that performs logarithmic interpolation on input values.
+
+    """
+    
     ind = np.where(yy>0)
     try:
         logx = np.log10(xx[ind].value)
@@ -30,13 +49,9 @@ def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolat
     log_interp = lambda zz: np.power(10.0, lin_interp(np.log10(zz)))
 
     return log_interp
-    
-def get_memory_usage():
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1073741824  # in GB
-
 
 def yaml_file_to_dictionary(filename):
+    """ Opens a yaml file and returns a dictionary from its contents. """
     with open(filename, "r") as stream:
         data = yaml.load(stream)
         #data = yaml_stream_to_dictionary(stream)
@@ -44,6 +59,7 @@ def yaml_file_to_dictionary(filename):
 
 
 def yaml_stream_to_dictionary(stream):
+    """ Uses an opened yaml file and returns the dicionary. """
     try:
         from yaml import CLoader as Loader, CDumper as Dumper
     except ImportError:
@@ -52,12 +68,35 @@ def yaml_stream_to_dictionary(stream):
 
 
 def print_memory_usage():
+    """ Prints the current memory usage in GB. """
+
     process = psutil.Process(os.getpid())
     print("Memory usage: ", process.memory_info().rss /
           (1024 * 1024 * 1000), " GB.")
 
 
 def transform_bin_to_h5(bin_filename, h5_filename=None):
+    """
+    Transforms a binary file containing galaxy data from lognormal_galaxies into an HDF5 file.
+
+    Parameters
+    ----------
+    bin_filename : str
+        Path to the binary output file containing the galaxy catalog from lognormal_galaxies.
+    h5_filename : str, optional
+        Path to the output HDF5 file.
+        If not provided, the output file will be created with the same name as the input file, 
+        but with the extension '.h5'.
+
+    Returns
+    -------
+    h5_filename
+        Path to the output HDF5 file 
+    N_gal
+        Number of galaxies.
+
+    """
+
     if h5_filename is None:
         h5_filename = ".".join(bin_filename.split(".")[:-1]) + ".h5"
     print(f"Saving to {h5_filename}")
@@ -99,6 +138,21 @@ def transform_bin_to_h5(bin_filename, h5_filename=None):
 
 
 def get_cylinder_mask(N_mesh):
+    """
+    Generates a mask for a cylindrical region in a 3D grid.
+    The cylinder is elongated in the first axis.
+
+    Parameters
+    ----------
+    N_mesh : array-like
+        Number of cells in each dimension (3D grid).
+
+    Returns
+    -------
+    ndarray
+        Cylindrical mask indicating the region of interest.
+
+    """
     row_2d = np.array(
         [np.arange(N_mesh[1]) - N_mesh[1] / 2.0 for i in range(N_mesh[2])]
     ).T
@@ -112,6 +166,24 @@ def get_cylinder_mask(N_mesh):
 
 
 def get_checker_mask(N_mesh, N_cells=1):
+    """
+    Generates a checkerboard mask for a 3D grid.
+    The mask is constant along the first axis.
+
+    Parameters
+    ----------
+    N_mesh : array-like
+        Number of cells in each dimension (3D grid).
+    N_cells : int, optional
+        Number of cells per checkerboard cell (default is 1).
+
+    Returns
+    -------
+    ndarray
+        Checkerboard mask for the specified 3D grid.
+
+    """
+
     obs_mask_2d = np.zeros(shape=(N_mesh[1], N_mesh[2]))
     row_2d = np.array([np.arange(N_mesh[1]) for i in range(N_mesh[2])]).T
     col_2d = np.array([np.arange(N_mesh[2]) for i in range(N_mesh[1])])
@@ -126,14 +198,17 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2):
 
     Parameters
     ----------
-    pkspec : array-like (3D)
+    pkspec : array-like (1D)
         Array of power spectrum values.
+        Flattened 3D array.
     k_bins : array-like (1D)
         Array of bin edges for the k values.
-    kspec : array-like (3D)
-        Array of k values corresponding to the power spectrum.
-    muspec : array-like (3D)
-        Array of mu values corresponding to the power spectrum.
+    kspec : array-like (1D)
+        Array of k values corresponding to pkspec.
+        Flattened 3D array.
+    muspec : array-like (1D)
+        Array of mu values corresponding to pkspec.
+        Flattened 3D array.
     lmax : int, optional
         Maximum multipole moment to calculate. 
         Options: 1, 2
@@ -175,6 +250,28 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2):
     )
 
 def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
+    """
+    Bins the power spectrum into a grid of given k_bins in the perpendicular and parallel to the LOS directions.
+
+    Parameters:
+    -----------
+    pkspec: array-like (1D)
+        Power spectrum data to be binned.
+        Flattened 3D array.
+    k_bins: array-like
+        Array specifying the bin edges for both k_par and k_perp.
+    k_par: array-like (1D)
+        Array of k_parallel values corresponding to pkspec.
+        Flattened 3D array.
+    k_perp: array-like (1D)
+        Array of k_perpendicular values corresponding to pkspec.
+
+    Returns:
+    --------
+    P_k_2d: array
+        Binned 2D power spectrum.
+
+    """
     P_k_2d, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
         k_par, k_perp, pkspec, bins=[k_bins, k_bins], statistic="mean"
     )
@@ -182,6 +279,35 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     return P_k_2d
 
 def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
+    """
+    Bins the power spectrum into a grid of given k_bins and mu_bins.
+
+    Parameters:
+    -----------
+    pkspec: array-like (1D)
+        Power spectrum data to be binned. Flattened 3D array.
+    k_bins: array-like
+        Array specifying the bin edges for k values.
+    kspec: array-like (1D)
+        Array of k values corresponding to pkspec.
+        Flattened 3D array.
+    muspec: array-like (1D)
+        Array of mu values corresponding to pkspec.
+        Flattened 3D array.
+    mu_bins: array-like
+        Array specifying the bin edges for mu values.
+
+    Returns:
+    --------
+    mean_k_2d: array
+        Binned mean k values in the 2D grid.
+    mean_mu_2d: array
+        Binned mean mu values in the 2D grid.
+    P_k_mu: array
+        Binned power spectrum.
+
+    """
+
     P_k_mu, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
         kspec, muspec, pkspec, bins=[k_bins, mu_bins], statistic="mean"
     )
@@ -200,38 +326,16 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
 
 
 def jinc(x):
+    """ 
+    Returns the Jinc function for x!=0 and the limit 0.5 at x==0.
+    The Jinc function is the first Bessel function of x divided by x.
+
+    """
     return np.where(x != 0, j1(x) / x, 0.5)
-
-
-def downsample_mesh(mesh, box_size, new_N_mesh=None, new_voxel_length=None, resampler='cic'):
-    """
-    Returns down-sampled version of a mesh 'mesh' with the new N_mesh 'new_N_mesh' or voxel_length 'new_voxel_length'.
-    It assumes that the input mesh has mesh number self.N_mesh and voxel length self.voxel_length.
-    """
-    logging.info("Downsampling the mesh...")
-    if (new_N_mesh is None) and (new_voxel_length is None):
-        raise ValueError(
-            "You have to provide either new_N_mesh or new_voxel_length!"
-        )
-    elif new_N_mesh is None:
-        new_N_mesh = np.ceil(
-            box_size / new_voxel_length).to(1).astype(int)
-
-    if not isinstance(mesh, pmesh.pm.RealField):
-        mesh = make_map(mesh, np.shape(mesh), box_size)
-    pm_down = pmesh.pm.ParticleMesh(
-        new_N_mesh,
-        BoxSize=box_size,
-        dtype="float32",
-        resampler=resampler,
-    )
-    logging.info("Done.")
-    return pm_down.downsample(mesh, keep_mean=True)
-
 
 def make_map(m, Nmesh, BoxSize, type="real"):
     """
-    Returns a pmesh.RealField object from an array 'm' as input using the cic resampler.
+    Returns a pmesh.RealField object from an array 'm' as input.
 
     Parameters
     ----------

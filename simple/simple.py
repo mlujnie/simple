@@ -19,8 +19,8 @@ from astropy.table import Table
 from scipy.integrate import quad
 from scipy.interpolate import interp1d
 
-from simple.run_module import *
-from simple.lognormal_im_module import (
+from simple.run_lognormal_galaxies import *
+from simple.tools_python import (
     transform_bin_to_h5,
     bin_scipy,
     jinc,
@@ -746,10 +746,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 if " cosmo" in data[key]:
                     data[key] = data[key].replace(
                         " cosmo", " self.astropy_cosmo")
-            try:
-                data[key] = eval(data[key])
-            except Exception as e:
-                logging.debug(key, e)
+                try:
+                    data[key] = eval(data[key])
+                except Exception as e:
+                    try:
+                        data[key] = u.Quantity(data[key])
+                    except Exception as e:
+                        logging.debug(key, e)
+
         return data
 
     # method to read instance from saved file.
