@@ -123,13 +123,13 @@ def downsample_mask(old_array, long nx, long ny, long nz):
     for i in range(new_shape[0]):
         for j in range(new_shape[1]):
             for k in range(new_shape[2]):
-                new_array[i,j,k] = old_array[2*i,2*j,2*k] \
+                new_array[i,j,k] = (old_array[2*i,2*j,2*k] \
                                     + old_array[2*i,2*j,2*k+1] \
                                     + old_array[2*i,2*j+1,2*k] \
                                     + old_array[2*i,2*j+1,2*k+1] \
                                     + old_array[2*i+1,2*j,2*k] \
                                     + old_array[2*i+1,2*j,2*k+1] \
                                     + old_array[2*i+1,2*j+1,2*k] \
-                                    + old_array[2*i+1,2*j+1,2*k+1]
+                                    + old_array[2*i+1,2*j+1,2*k+1]) / 8
                 #sum(old_array[2*i:2*i+2, 2*j:2*j+2, 2*k:2*k+2])
     return new_array
