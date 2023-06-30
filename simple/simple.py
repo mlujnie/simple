@@ -135,8 +135,205 @@ def angular_tophat_filter(k, v):
     w = jinc(k_perp * rper) * 2
     return w * v
 
+class BasicBoxCalculator:
+    
+    def __init__(self, redshift, box_size, N_mesh, single_redshift, cosmology):
+        self.redshift = redshift
+        self.box_size = box_size
+        self.N_mesh = N_mesh
+        self.single_redshift = single_redshift
+        self.astropy_cosmo = cosmology
+        
+        self.Mpch = u.Mpc / self.astropy_cosmo.h
+        
+        self.voxel_length = self.box_size / self.N_mesh
+        
+        self.LOS = np.array([1,0,0])
+        
+    def get_comoving_distance_per_delta_z(self, mean_z, delta_z):
+        """
+        Calculates the comoving distance between (z + delta_z) and (z - delta_z).
 
-class LognormalIntensityMock:
+        Parameters
+        ----------
+        mean_z : float
+            Mean redshift of the box: mean_z = (z_min + z_max) / 2.
+        delta_z : float
+            Half of the redshift difference: delta_z = (z_max - z_min) / 2.
+
+        Returns
+        -------
+        Quantity
+            Comoving distance between (z + delta_z) and (z - delta_z).
+
+        """
+
+        return self.astropy_cosmo.comoving_distance(
+            mean_z + delta_z
+        ) - self.astropy_cosmo.comoving_distance(mean_z - delta_z)
+        
+    @functools.cached_property
+    def delta_redshift(self):
+        """
+        Calculates the redshift difference corresponding to the comoving distance of the LOS length.
+
+        Returns
+        -------
+        float
+            Redshift difference corresponding to the comoving distance of the line-of-sight (LOS) length.
+            Cached like a property.
+
+        Raises
+        ------
+        ValueError
+            If the LOS is not aligned with any of the axes [1,0,0], [0,1,0], or [0,0,1].
+
+        """
+
+        axis = np.where(self.LOS == 1)[0]
+        if len(axis) != 1:
+            raise ValueError("LOS must be [1,0,0] or [0,1,0] or [0,0,1].")
+        axis = axis[0]
+        LOS_LENGTH = (
+            self.box_size[axis].to(u.Mpc).value
+        )  # box length in Mpc, 0 -> Lx, 1 -> Ly, 2 -> Lz
+        delta_zs = np.linspace(0.0, self.redshift, 1000)
+        comoving_distances = (
+            self.get_comoving_distance_per_delta_z(self.redshift, delta_zs)
+            .to(u.Mpc)
+            .value
+        )
+        delta_z_per_comoving_distance = interp1d(comoving_distances, delta_zs)
+        return delta_z_per_comoving_distance(LOS_LENGTH)
+    
+    @functools.cached_property
+    def minimum_distance(self):
+        """ Calculates the minimum distance of a cell within the mesh (cached)."""
+        return self.astropy_cosmo.comoving_distance(
+            self.redshift - self.delta_redshift
+        ).to(self.Mpch)
+    
+    @functools.cached_property
+    def redshift_mesh_axis(self):
+        """ Calculates the redshift coordinates along the LOS axis (cached)."""
+        distances = (
+            self.minimum_distance
+            + self.voxel_length[0] * (np.arange(self.N_mesh[0]) + 0.5)
+        ).to(u.Mpc)
+        print("distances: ", distances)
+        return z_at_value(self.astropy_cosmo.comoving_distance, distances).value
+
+    
+    @functools.cached_property
+    def mean_redshift(self):
+        " Calculates the mean of the redshifts of the cells (cached)."
+        return np.mean(self.redshift_mesh_axis)
+    
+    
+    @functools.cached_property
+    def k_Nyquist(self):
+        """ Calculates the Nyquist frequency (cached)."""
+        return np.pi / self.voxel_length
+    
+    @functools.cached_property
+    def box_volume(self):
+        """ Calculates the volume of the simulation box.
+            Cached like a property self.box_volume."""
+        return self.box_size[0] * self.box_size[1] * self.box_size[2]
+
+    @functools.cached_property
+    def voxel_volume(self):
+        """ Calculates the volume of a voxel.
+            Cached like a property self.voxel_volume."""
+        return self.voxel_length[0] * self.voxel_length[1] * self.voxel_length[2]
+
+    def get_kspec(self, dohalf=True, doindep=True):
+        """
+        Compute the power spectrum in Fourier space.
+
+        Parameters
+        ----------
+        dohalf : bool, optional
+            Flag indicating whether to generate only the half of the Fourier transforms due to symmetry. Default is True.
+        doindep : bool, optional
+            Flag indicating whether to calculate only the independent modes of the Fourier transform. Default is True.
+
+        Returns
+        -------
+        kspec : ndarray
+            The norm of the wavevector k in the Fourier transform of our meshes.
+        muspec : ndarray
+            The corresponding values of mu (cosine of the angle between the LOS and the wavevector k).
+        indep : ndarray (bool)
+            Indicates whether the mode is independent or not.
+
+        """
+
+        logging.info("Getting k_spec...")
+        nx, ny, nz = self.N_mesh
+        lx, ly, lz = self.box_size.to(self.Mpch).value
+
+        kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
+            nx, ny, nz, lx, ly, lz, dohalf, doindep
+        )
+        logging.info("Done with the biggest part including k_par and k_perp.")
+
+        self.kspec = kspec
+        self.muspec = muspec
+        self.indep = indep
+        self.k_par = k_par
+        self.k_perp = k_perp
+        self.kx = kx
+        self.ky = ky
+        self.kz = kz
+        logging.info("Done")
+
+        return kspec, muspec, indep
+
+    def get_mesh_positions(self, voxel_length, N_mesh, save_to_self=True):
+        """
+        Returns an array of mesh positions with dimensions (N_mesh, N_mesh, N_mesh, 3),
+        where mesh_position[i, j, k] is the position vector of the center of cell (i, j, k) in Mpc/h.
+
+        Parameters
+        ----------
+        voxel_length : Quantity array (3,)
+            Length of each voxel in the three spatial dimensions with length units.
+        N_mesh : array (3,)
+            Number of cells in each dimension (dimensionless array).
+        save_to_self : bool, optional
+            Save mesh_position to self.mesh_position. Default: True.
+
+        """
+
+        logging.info("Getting mesh positions.")
+
+        position = np.transpose(
+            np.transpose([np.arange(N_mesh[i])
+                         for i in range(N_mesh.shape[0])])
+            * voxel_length
+            + voxel_length / 2.0
+        )
+        position = position.to(self.Mpch).value
+        x = np.array(
+            [[position[0] for i in range(N_mesh[1])] for j in range(N_mesh[2])]
+        )
+        y = np.transpose(
+            [[position[1] for i in range(N_mesh[2])]
+             for j in range(N_mesh[0])],
+            axes=[1, 2, 0],
+        )
+        z = np.transpose(
+            [[position[2] for i in range(N_mesh[0])]
+             for j in range(N_mesh[1])],
+            axes=[2, 0, 1],
+        )
+        mesh_position = np.transpose([x, y, z], axes=[3, 2, 1, 0])
+        if save_to_self:
+            self.mesh_position = mesh_position
+        return (mesh_position * self.Mpch).to(self.Mpch)
+
+class LognormalIntensityMock(BasicBoxCalculator):
     """
     The LognormalIntensityMock class takes cosmological and survey parameters as input
     and produces a intensity and galaxy density meshes from a lognormal galaxy catalog.
@@ -613,7 +810,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     with h5py.File(self.sigma_noise, "r") as ff:
                         self.sigma_noise = ff['sigma_noise'] * u.Unit(ff['sigma_noise'].attrs['unit'])
                 except Exception as e2:
-                    logging.Error("Could not read Table or hdf5 file:\n{}\n{}".format(e1, e2))
+                    logging.error("Could not read Table or hdf5 file:\n{}\n{}".format(e1, e2))
         if "lambda_restframe" in input_dict.keys():
             self.lambda_restframe = input_dict["lambda_restframe"]
             self.nu_restframe = None
@@ -1280,18 +1477,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Cached like a property self.n_gal_detected."""
         return (self.N_gal_detected / self.box_volume).to(1 / u.Mpc**3)
 
-    @functools.cached_property
-    def box_volume(self):
-        """ Calculates the volume of the simulation box.
-            Cached like a property self.box_volume."""
-        return self.box_size[0] * self.box_size[1] * self.box_size[2]
-
-    @functools.cached_property
-    def voxel_volume(self):
-        """ Calculates the volume of a voxel.
-            Cached like a property self.voxel_volume."""
-        return self.voxel_length[0] * self.voxel_length[1] * self.voxel_length[2]
-
     def run_lognormal_simulation_cpp(self):
         """
         Calculates the power spectrum from input cosmology
@@ -1541,40 +1726,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         return self.astropy_cosmo.comoving_distance(
             mean_z + delta_z
         ) - self.astropy_cosmo.comoving_distance(mean_z - delta_z)
-
-    @functools.cached_property
-    def delta_redshift(self):
-        """
-        Calculates the redshift difference corresponding to the comoving distance of the LOS length.
-
-        Returns
-        -------
-        float
-            Redshift difference corresponding to the comoving distance of the line-of-sight (LOS) length.
-            Cached like a property.
-
-        Raises
-        ------
-        ValueError
-            If the LOS is not aligned with any of the axes [1,0,0], [0,1,0], or [0,0,1].
-
-        """
-
-        axis = np.where(self.LOS == 1)[0]
-        if len(axis) != 1:
-            raise ValueError("LOS must be [1,0,0] or [0,1,0] or [0,0,1].")
-        axis = axis[0]
-        LOS_LENGTH = (
-            self.box_size[axis].to(u.Mpc).value
-        )  # box length in Mpc, 0 -> Lx, 1 -> Ly, 2 -> Lz
-        delta_zs = np.linspace(0.0, self.redshift, 1000)
-        comoving_distances = (
-            self.get_comoving_distance_per_delta_z(self.redshift, delta_zs)
-            .to(u.Mpc)
-            .value
-        )
-        delta_z_per_comoving_distance = interp1d(comoving_distances, delta_zs)
-        return delta_z_per_comoving_distance(LOS_LENGTH)
 
     def assign_redshift_along_axis(self):
         """
@@ -2524,49 +2675,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             np.size(self.sky_intensity_mesh[self.sky_intensity_mesh < 0.])/np.prod(self.N_mesh)))
         return self.sky_intensity_mesh.to(self.mean_intensity)
 
-    def get_kspec(self, dohalf=True, doindep=True):
-        """
-        Compute the power spectrum in Fourier space.
-
-        Parameters
-        ----------
-        dohalf : bool, optional
-            Flag indicating whether to generate only the half of the Fourier transforms due to symmetry. Default is True.
-        doindep : bool, optional
-            Flag indicating whether to calculate only the independent modes of the Fourier transform. Default is True.
-
-        Returns
-        -------
-        kspec : ndarray
-            The norm of the wavevector k in the Fourier transform of our meshes.
-        muspec : ndarray
-            The corresponding values of mu (cosine of the angle between the LOS and the wavevector k).
-        indep : ndarray (bool)
-            Indicates whether the mode is independent or not.
-
-        """
-
-        logging.info("Getting k_spec...")
-        nx, ny, nz = self.N_mesh
-        lx, ly, lz = self.box_size.to(self.Mpch).value
-
-        kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
-            nx, ny, nz, lx, ly, lz, dohalf, doindep
-        )
-        logging.info("Done with the biggest part including k_par and k_perp.")
-
-        self.kspec = kspec
-        self.muspec = muspec
-        self.indep = indep
-        self.k_par = k_par
-        self.k_perp = k_perp
-        self.kx = kx
-        self.ky = ky
-        self.kz = kz
-        logging.info("Done")
-
-        return kspec, muspec, indep
-
     def bin_scipy(self, pkspec):
         """
         Perform binning of the power spectrum.
@@ -2852,49 +2960,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             quadrupole,
         )
 
-    def get_mesh_positions(self, voxel_length, N_mesh, save_to_self=True):
-        """
-        Returns an array of mesh positions with dimensions (N_mesh, N_mesh, N_mesh, 3),
-        where mesh_position[i, j, k] is the position vector of the center of cell (i, j, k) in Mpc/h.
-
-        Parameters
-        ----------
-        voxel_length : Quantity array (3,)
-            Length of each voxel in the three spatial dimensions with length units.
-        N_mesh : array (3,)
-            Number of cells in each dimension (dimensionless array).
-        save_to_self : bool, optional
-            Save mesh_position to self.mesh_position. Default: True.
-
-        """
-
-        logging.info("Getting mesh positions.")
-
-        position = np.transpose(
-            np.transpose([np.arange(N_mesh[i])
-                         for i in range(N_mesh.shape[0])])
-            * voxel_length
-            + voxel_length / 2.0
-        )
-        position = position.to(self.Mpch).value
-        x = np.array(
-            [[position[0] for i in range(N_mesh[1])] for j in range(N_mesh[2])]
-        )
-        y = np.transpose(
-            [[position[1] for i in range(N_mesh[2])]
-             for j in range(N_mesh[0])],
-            axes=[1, 2, 0],
-        )
-        z = np.transpose(
-            [[position[2] for i in range(N_mesh[0])]
-             for j in range(N_mesh[1])],
-            axes=[2, 0, 1],
-        )
-        mesh_position = np.transpose([x, y, z], axes=[3, 2, 1, 0])
-        if save_to_self:
-            self.mesh_position = mesh_position
-        return (mesh_position * self.Mpch).to(self.Mpch)
-
     def luminosity_function_times_L(self, L):
         """ dn/dL * L"""
         return self.luminosity_function(L) * L
@@ -3064,32 +3129,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             tracer="n_gal",
             galaxy_selection=self.galaxy_selection["n_gal"],
         )[:, None, None]
-
-    @functools.cached_property
-    def minimum_distance(self):
-        """ Calculates the minimum distance of a cell within the mesh (cached)."""
-        return self.astropy_cosmo.comoving_distance(
-            self.redshift - self.delta_redshift
-        ).to(self.Mpch)
-
-    @functools.cached_property
-    def redshift_mesh_axis(self):
-        """ Calculates the redshift coordinates along the LOS axis (cached)."""
-        distances = (
-            self.minimum_distance
-            + self.voxel_length[0] * (np.arange(self.N_mesh[0]) + 0.5)
-        ).to(u.Mpc)
-        return z_at_value(self.astropy_cosmo.comoving_distance, distances).value
-
-    @functools.cached_property
-    def mean_redshift(self):
-        " Calculates the mean of the redshifts of the cells (cached)."
-        return np.mean(self.redshift_mesh_axis)
-
-    @functools.cached_property
-    def k_Nyquist(self):
-        """ Calculates the Nyquist frequency (cached)."""
-        return np.pi / self.voxel_length
 
     def run(self, skip_lognormal=False, save_meshes=False, save_results=True):
         """

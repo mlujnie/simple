@@ -26,8 +26,7 @@ do_spectral_tophat_smooth: False
 do_angular_smooth: False
 sigma_beam : '0 * u.arcsec'
 dlambda : '2.38 * u.angstrom'
-sigma_noise : "./tests/input/test_sigma_noise_cube.h5"
-#'./tests/input/validation_ifu_sigma_noise.ecsv'
+sigma_noise : './tests/input/validation_ifu_sigma_noise.ecsv'
 footprint_radius : '9 * u.arcmin'
 
 # info on calculating the power spectrum
