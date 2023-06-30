@@ -147,13 +147,13 @@ class LognormalIntensityMock:
     input_dict can be a dictionary or string. 
     As a dictionary, it should contain the following input parameters.
     If it is a string, it should be the filename of a yaml file version of the dictionary.
-    
+
     Strings as arguments in the dictionary or yaml file can be evaluated in python, e.g. '10 * u.Mpc'.
     Here, 'u' is the imported name for 'astropy.units'.
     Other possible packages are numpy ('np') and astropy.constants ('const').
     If a string contains 'cosmo', it will be converted to the class' astropy cosmology.
     Therefore expressions such as 'cosmo.h' can be evaluated self-consistently.
-    
+
 
     Parameters
     ----------
@@ -171,7 +171,7 @@ class LognormalIntensityMock:
         (see https://docs.astropy.org/en/stable/cosmology/io.html#cosmology-io).
         If dict, it will attempt to initiate an astropy.cosmology.FlatwCDM object from the dict 
         (see https://docs.astropy.org/en/stable/api/astropy.cosmology.FlatwCDM.html#astropy.cosmology.FlatwCDM).
-    
+
     luminosity_function: string or function
         If function, it should take the luminosity as an input (in units of luminosity_unit, but as a float)
         and return dn/dL as output (in units of 1/luminosity_unit * 1/Mpc**3).
@@ -216,20 +216,20 @@ class LognormalIntensityMock:
         Central redshift of the box so that z_max - redshift = redshift - z_min
         where z_min and z_max are the minimum and maximum redshift of the box, respectively.
         Will be assigned to the entire box if single_redshift == True.
-    
+
     bias: float
         Galaxy bias.
-    
+
     box_size: astropy quantity array
         This should be a list or array containing the three box side lengths 
         in the dimension of length using astropy.units.
         It will be converted to units of Mpc/h.
-    
+
     N_mesh: array-like, optional
         List containing the mesh size (3 numbers) used to generate the galaxy catalog,
           meshes, and Fourier transforms.
         This is optional if voxel_length is given instead.
-    
+
     voxel_length: astropy quantity array, optional
         List containing the side lengths of the voxels (3 astropy quantities).
         It will be slightly adjusted to make sure than N_mesh is an integer.
@@ -278,29 +278,33 @@ class LognormalIntensityMock:
         The keys must contain 'n_gal' and 'intensity'.
         Options for the values are 'all', 'detected', and 'undetected'.
 
-    sigma_noise: astropy quantity, function, or string, optional
+    sigma_noise: astropy quantity, nd-array of astropy quantities, function, or string, optional
         If it is an astropy quantity, it denotes the sigma of the Gaussian noise in intensity units.
+        If it is an array of astropy quantities, it denotes the sigma of the Gaussian noise in intensity units
+        at that position in the array.
         If it is a function, it should take the redshift as input and should output the 
         sigma_noise at that redshift (as an astropy quantity in intensity units).
-        If it is a string, it should be the name of the file in an ecsv format
-        readable by astropy.table, containing
-            - 'redshift' column: redshift,
-            - 'sigma_noise' column: sigma_noise at that redshift,
-            - unit of 'sigma_noise' (automatic if saved using astropy.table).
-        Then it will be interpolated between redshifts (in case a redshift is out of bounds,
-        the border values are used.) 
+        If it is a string, it can be either 
+            1. the name of the file in an ecsv format readable by astropy.table, containing
+                - 'redshift' column: redshift,
+                - 'sigma_noise' column: sigma_noise at that redshift,
+                - unit of 'sigma_noise' (automatic if saved using astropy.table)
+                Then it will be interpolated between redshifts (in case a redshift is out of bounds,
+                the border values are used.) 
+            2. or the name of the hdf5 file containing the sigma_noise mesh (same shape as N_mesh)
+                under the name 'sigma_noise' with the unit as a string under ff['sigma_noise'].attrs['unit'].
         Default: None. Then the noise is zero.
 
     lambda_restframe: astropy quantity, optional
         Rest-frame wavelength in length units.
         If lambda_restframe is given, the intensity will be specific intensity dI/dlambda.
         Optional if 'nu_restframe' is given.
-    
+
     nu_restframe: astropy quantity, optional
         Rest-frame frequency in inverse time units.
         If lambda_restframe is given, the intensity will be specific intensity dI/dnu.
         Optional if 'lambda_restframe' is given.
-    
+
     brightness_temperature: bool, optional
         Flag stating whether to calculate everything in temperature units
         instead of specific intensity units.        
@@ -337,7 +341,7 @@ class LognormalIntensityMock:
         This will be a Gaussian smoothing kernel.
         If True, 'sigma_beam' must be given. 
         Default: False.
-    
+
     sigma_beam: astropy quantity, optional
         Gaussian sigma for the Gaussian smoothing kernel perpendicular to the LOS, in angle units.
         This will be evaluated at the central redshift ('redshift' parameter) of the box for smoothing.
@@ -348,7 +352,7 @@ class LognormalIntensityMock:
         Radius of a circular focal plane in angle units.
         This is necessary if you want to perform a sky subtraction and will be ignored otherwise.
         Default: None
-    
+
     seed_lognormal: int, optional
         Seed for the (random) generation of the lognormal galaxy catalog and the noise.
         It it is the same twice, you should get the same results.
@@ -392,7 +396,7 @@ class LognormalIntensityMock:
 
     """
 
-    def __init__(self, input_dict):  
+    def __init__(self, input_dict):
         # TODO:  change to include the default input just like in Jose's code! Much cooler.
 
         # initiate the input dictionary and evaluate the strings.
@@ -427,7 +431,7 @@ class LognormalIntensityMock:
             self.out_dir = input_dict["out_dir"]
         else:
             self.out_dir = "./data"
-        
+
         # initiate cosmology
         cosmology = input_dict["cosmology"]
         if isinstance(cosmology, str):
@@ -576,7 +580,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 bounds_error=False
             )
             self.limit_ngal = (
-                lambda z: interp_limit_ngal(z) * limit_ngal_table["min_flux"].unit
+                lambda z: interp_limit_ngal(
+                    z) * limit_ngal_table["min_flux"].unit
             )
         self.galaxy_selection = input_dict["galaxy_selection"]
 
@@ -589,19 +594,26 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.sigma_noise, str
         ):  # if it is the name of a file, try to get the table from the file
             self.sigma_noise_file = self.sigma_noise
-            sigma_noise_table = Table.read(
-                self.sigma_noise, format="ascii.ecsv")
-            interp_sigma_noise = interp1d(
-                sigma_noise_table["redshift"],
-                sigma_noise_table["sigma_noise"],
-                fill_value=(
-                    sigma_noise_table['sigma_noise'][0], sigma_noise_table['sigma_noise'][-1]),
-                bounds_error=False
-            )
-            self.sigma_noise = (
-                lambda z: interp_sigma_noise(
-                    z) * sigma_noise_table["sigma_noise"].unit
-            )
+            try:
+                sigma_noise_table = Table.read(
+                    self.sigma_noise, format="ascii.ecsv")
+                interp_sigma_noise = interp1d(
+                    sigma_noise_table["redshift"],
+                    sigma_noise_table["sigma_noise"],
+                    fill_value=(
+                        sigma_noise_table['sigma_noise'][0], sigma_noise_table['sigma_noise'][-1]),
+                    bounds_error=False
+                )
+                self.sigma_noise = (
+                    lambda z: interp_sigma_noise(
+                        z) * sigma_noise_table["sigma_noise"].unit
+                )
+            except Exception as e1: # try reading it as an hdf5 file.
+                try:
+                    with h5py.File(self.sigma_noise, "r") as ff:
+                        self.sigma_noise = ff['sigma_noise'] * u.Unit(ff['sigma_noise'].attrs['unit'])
+                except Exception as e2:
+                    logging.Error("Could not read Table or hdf5 file:\n{}\n{}".format(e1, e2))
         if "lambda_restframe" in input_dict.keys():
             self.lambda_restframe = input_dict["lambda_restframe"]
             self.nu_restframe = None
@@ -1454,7 +1466,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.outfile_prefix + "_lognormal_rlz0.bin",
         )
 
-    def load_lognormal_catalog_cpp(self, bin_filename):
+    def load_lognormal_catalog_cpp(self, bin_filename, delete_bin=True):
         """
         Loads the lognormal catalog from a binary file.
 
@@ -1462,6 +1474,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ----------
         bin_filename : str
             Path to the binary file containing the lognormal galaxy catalog (output from lognormal_galaxies).
+        delete_bin: bool
+            Set to False if you want to keep the binary file.
+            Default: True.
 
         Returns
         -------
@@ -1484,7 +1499,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         self.cat["RSD_redshift_factor"] = (
             1 + da.dot(self.cat["Velocity"], self.LOS).compute() / const.c
         ).to(1)
-        os.remove(bin_filename)
+        if delete_bin:
+            os.remove(bin_filename)
 
     def input_power_spectrum(self, k):
         """
@@ -2436,33 +2452,26 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             da.random.seed(self.seed_lognormal)
             if callable(self.sigma_noise):
-                self.sigma_noise(
-                    self.redshift
-                )  # see if it is a function of redshift ~ wavelength
                 los_axis = np.where(self.LOS == 1)[0][0]
                 assert los_axis == 0
-                los_axis_shape = self.N_mesh[los_axis]
                 redshifts = self.redshift_mesh_axis
-                sigmas = da.ones(self.intensity_mesh.shape)
-                # transpose array so that the LOS is the last axis
-                transpose_axes = [1, 2, 0]
-                sigmas = da.transpose(sigmas, axes=transpose_axes)
-                # multiply by the sigma in each redshift slice
-                sigmas = sigmas * \
-                    self.sigma_noise(redshifts).to(self.mean_intensity).value
-                noise_mesh = da.random.normal(
-                    loc=0, scale=sigmas, size=sigmas.shape)
-                back_transpose_axes = [2, 0, 1]
-                noise_mesh = da.transpose(noise_mesh, axes=back_transpose_axes)
+                sigma_per_redshift = self.sigma_noise(redshifts).to(self.mean_intensity).value
+                sigma = sigma_per_redshift[:,None,None] * np.ones(self.intensity_mesh.shape)
 
-            else:  # if it is not a function, but a scalar
+            else:
+                # if it is not a function, but a scalar or a numpy array we can skip the callable.
+                if np.size(self.sigma_noise) > 1:
+                    try:
+                        assert (self.sigma_noise.shape == self.N_mesh).all()
+                    except AssertionError:
+                        logging.error(f"{self.sigma_noise.shape=} but {self.N_mesh=}")
                 self.sigma_noise = self.sigma_noise.to(self.mean_intensity)
                 # in intensity or temperature units.
                 sigma = self.sigma_noise.value
-                noise_mesh = da.random.normal(
-                    loc=0, scale=sigma, size=self.intensity_mesh.shape
-                )
 
+            noise_mesh = da.random.normal(
+                loc=0, scale=sigma, size=tuple(self.N_mesh) # size has to be a tuple, not an array.
+            )
         self.noise_mesh = (
             noise_mesh * self.mean_intensity).compute().to(self.mean_intensity)
 
@@ -3118,7 +3127,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         If `save_meshes` is True, the generated intensity and galaxy meshes will be saved to file.
 
         If `save_results` is True (default), the computed power spectra will be saved to file.
-        
+
         """
 
         if not skip_lognormal:

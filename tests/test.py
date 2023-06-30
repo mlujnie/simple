@@ -11,6 +11,7 @@ class TestStringMethods(unittest.TestCase):
         self.assertEqual(lim.N_mesh[0], 16)
         self.assertTrue(len(lim.cat['Position']) > 0)
 
+        lim.run(skip_lognormal=True)
         lim.downsample_all_meshes([8,8,8])
         lim.run(skip_lognormal=True)
 

@@ -10,7 +10,7 @@ RSD : False
 
 # galaxy luminosity function & selection
 luminosity_unit: '1e42 * u.erg / u.s'
-Lmin : '(1e41 * u.erg / u.s)' # see figure 4 in Gronke+15
+Lmin : '(2e41 * u.erg / u.s)' # see figure 4 in Gronke+15
 Lmax : '(np.inf * u.erg / u.s)'
 min_flux : "./tests/input/validation_fluxlimits_wavedep_sensitivity.ecsv"
 # limit_ngal: '0.0006378481529983525 * 1 / u.Mpc**3 ' # to get the target number of galaxies: 2.5/IFU.
@@ -26,7 +26,8 @@ do_spectral_tophat_smooth: False
 do_angular_smooth: False
 sigma_beam : '0 * u.arcsec'
 dlambda : '2.38 * u.angstrom'
-sigma_noise : './tests/input/validation_ifu_sigma_noise.ecsv'
+sigma_noise : "./tests/input/test_sigma_noise_cube.h5"
+#'./tests/input/validation_ifu_sigma_noise.ecsv'
 footprint_radius : '9 * u.arcmin'
 
 # info on calculating the power spectrum

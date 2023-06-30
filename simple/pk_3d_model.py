@@ -285,6 +285,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         mask_window_function_2=None,
         save=True,
         tracer=None,
+        return_3d=False
     ):
         """
         Calculates the 3D power spectrum model P(k) by incorporating smoothing, convolution with the window function,
@@ -318,6 +319,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         tracer : str, optional
             Options: n_gal, intensity, cross, sky_subtracted_intensity, sky_subtracted_cross.
             The tracer label in the saved file. Default is None.
+        return_3d: bool, optional
+            Set to True if you want to return the 3D model as well.
 
         Returns:
         --------
@@ -444,7 +447,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 ff[f"{tracer}/P_shot"] = P_shot_smoothed.to(self.Mpch**3).value
                 ff[f"{tracer}/S_bar"] = (S_bar * box_volume).to(self.Mpch**3).value
                 logging.info("Done")
-                return mean_k, monopole, quadrupole
+                if return_3d:
+                    return model, mean_k, monopole, quadrupole
+                else:
+                    return mean_k, monopole, quadrupole
 
     def model_shot_noise(self, N_real=10):
         """
@@ -500,6 +506,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         self.apply_selection_function()
         self.do_angular_smooth = False
         self.do_spectral_smooth = False
+        # for an unknown reason, Lmax sometimes just becomes a number and not a quantity.
+        # Then set it to infinity with a unit.
+        try:
+            self.Lmax.unit
+        except:
+            self.Lmax = np.inf * self.luminosity_unit
         self.paint_intensity_mesh(position="Position")
         self.paint_galaxy_mesh(position="Position")
         indices = np.arange(self.N_mesh[1]*self.N_mesh[2])
@@ -511,18 +523,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             Nmesh=self.N_mesh,
             BoxSize=self.box_size.to(self.Mpch).value,
         )
-        intensity_mesh = intensity_mesh.r2c().apply(
-            self.compensation[0][1], kind=self.compensation[0][2]
-        ).c2r()
         n_gal_mesh = self.n_gal_mesh.to(u.Mpc**(-3)).value
         del self.n_gal_mesh
         n_gal_mesh = make_map(n_gal_mesh,
                               Nmesh=self.N_mesh,
                               BoxSize=self.box_size.to(self.Mpch).value,
                               )
-        n_gal_mesh = n_gal_mesh.r2c().apply(
-            self.compensation[0][1], kind=self.compensation[0][2]
-        ).c2r()
         for i in range(N_real):
             if False:
                 self.cat["Position"][:, 1] = np.random.uniform(
@@ -766,7 +772,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """ Weights for the galaxy density mesh: 1/(mean n_gal as a function of position)."""
         return 1.0 / self.mean_ngal_per_redshift_mesh  # / self.n_bar_gal
 
-    def get_intensity_model(self, sky_subtraction=False):
+    def get_intensity_model(self, sky_subtraction=False, return_3d=True):
         """
         Calculate and save the power spectrum model for the intensity.
 
@@ -813,11 +819,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             tracer = "sky_subtracted_intensity"
         else:
             tracer = "intensity"
-        (
-            mean_k,
-            monopole,
-            quadrupole,
-        ) = self.get_3d_pk_model(
+        result_tuple = self.get_3d_pk_model(
             damping_function,
             P_shot_smoothed,
             S_bar_im,
@@ -828,9 +830,22 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             convolve=True,
             save=True,
             tracer=tracer,
+            return_3d=return_3d
         )
+        if return_3d:
+            (model,
+            mean_k,
+            monopole,
+            quadrupole,
+            ) = result_tuple
+        else:
+            (
+                mean_k,
+                monopole,
+                quadrupole,
+            ) = result_tuple
         logging.info("Done.")
-        return mean_k, monopole, quadrupole
+        return result_tuple
 
     def get_n_gal_model(self):
         """
