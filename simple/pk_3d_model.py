@@ -812,7 +812,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             P_shot_smoothed = self.get_intensity_shot_noise()
         S_bar_im = self.get_S_bar(
             self.weight_mesh_im * self.obs_mask, sigma_noise_im)
-        logging.info("\nS_bar intensity: {}\n".format(S_bar_im))
+        logging.info("\nS_bar intensity: {}\n".format((S_bar_im * self.box_volume).to(self.Mpch**3)))
         observed_volume = self.get_observed_volume()
         logging.info("Calculating multipoles.")
         if sky_subtraction:
