@@ -41,8 +41,31 @@ def catalog_to_mesh_cython(Positions,
         iz = min([iz, N_mesh[2]-1])
         mesh[ix, iy, iz] += Weights[i]
         if i % 100000 == 0:
-            print("Finished {}/{}.".format(i+1, N_gal))
+            print("Mesh assignment: finished {}/{}.".format(i+1, N_gal))
     return mesh
+
+def apply_selection_function_by_position(Positions,
+                            Fluxes,
+                            flux_limit_mesh,
+                            N_mesh,
+                            Box_Size):
+    cdef long[:] detected
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Positions)[0]
+    detected = np.zeros(N_gal, dtype=int)
+    for i in range(N_gal):
+        ix = int(np.floor(Positions[i,0] / voxel_size[0]))
+        iy = int(np.floor(Positions[i,1] / voxel_size[1]))
+        iz = int(np.floor(Positions[i,2] / voxel_size[2]))
+        ix = min([ix, N_mesh[0]-1])
+        iy = min([iy, N_mesh[1]-1])
+        iz = min([iz, N_mesh[2]-1])
+        detected[i] = int(Fluxes[i] > flux_limit_mesh[ix, iy, iz])
+        if i % 100000 == 0:
+            print("Selection function: finished {}/{}.".format(i+1, N_gal))
+    return detected
+
 
 def getindep_cython(nx, ny, nz):
     """ From https://github.com/cblakeastro/intensitypower/tree/master."""
