@@ -5,13 +5,14 @@ import psutil
 import os
 import pmesh
 import logging
-#from yaml import load
+# from yaml import load
 from astropy.io.misc import yaml
 from scipy.stats import binned_statistic_2d, binned_statistic
 from scipy.special import legendre, j1
 from scipy.interpolate import interp1d
 
-def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolate'):
+
+def log_interp1d(xx, yy, kind='linear', bounds_error=False, fill_value='extrapolate'):
     """
     Logarithmic interpolation accepting linear quantities as input (transformed within the function).
 
@@ -34,8 +35,8 @@ def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolat
         A callable function that performs logarithmic interpolation on input values.
 
     """
-    
-    ind = np.where(yy>0)
+
+    ind = np.where(yy > 0)
     try:
         logx = np.log10(xx[ind].value)
     except:
@@ -44,17 +45,19 @@ def log_interp1d(xx, yy, kind='linear',bounds_error=False,fill_value='extrapolat
         logy = np.log10(yy[ind].value)
     except:
         logy = np.log10(yy[ind])
-    lin_interp = interp1d(logx, logy, kind=kind,bounds_error=bounds_error,fill_value=fill_value)
-    
-    log_interp = lambda zz: np.power(10.0, lin_interp(np.log10(zz)))
+    lin_interp = interp1d(logx, logy, kind=kind,
+                          bounds_error=bounds_error, fill_value=fill_value)
+
+    def log_interp(zz): return np.power(10.0, lin_interp(np.log10(zz)))
 
     return log_interp
+
 
 def yaml_file_to_dictionary(filename):
     """ Opens a yaml file and returns a dictionary from its contents. """
     with open(filename, "r") as stream:
         data = yaml.load(stream)
-        #data = yaml_stream_to_dictionary(stream)
+        # data = yaml_stream_to_dictionary(stream)
     return data
 
 
@@ -192,6 +195,7 @@ def get_checker_mask(N_mesh, N_cells=1):
     obs_mask = np.array([obs_mask_2d for i in range(N_mesh[0])])
     return obs_mask
 
+
 def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
     """
     Calculates the monopole and quadrupole (if lmax==2) power spectrum and mean k in the given k bins.
@@ -244,7 +248,8 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
     logging.info("Calculated mean_k.")
 
     if return_nmodes:
-        nmodes, k_edge, bin_number = binned_statistic(np.ones(kspec.shape), kspec, bins=k_bins, statistic='sum')
+        nmodes, k_edge, bin_number = binned_statistic(
+            kspec, kspec, bins=k_bins, statistic='count')
         return mean_k, monopole, 5 * quadrupole, nmodes
     else:
         return (
@@ -252,6 +257,7 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
             monopole,
             5 * quadrupole,
         )
+
 
 def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     """
@@ -281,6 +287,7 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     )
     logging.info("Calculated P_k_2d.")
     return P_k_2d
+
 
 def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
     """
@@ -325,8 +332,8 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
     )
     logging.info("Calculated mean mu (2d).")
     return (mean_k_2d,
-        mean_mu_2d,
-        P_k_mu,)
+            mean_mu_2d,
+            P_k_mu,)
 
 
 def jinc(x):
@@ -336,6 +343,7 @@ def jinc(x):
 
     """
     return np.where(x != 0, j1(x) / x, 0.5)
+
 
 def make_map(m, Nmesh, BoxSize, type="real"):
     """

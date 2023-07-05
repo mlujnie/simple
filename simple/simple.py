@@ -914,7 +914,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             else:
                 self.obs_mask = obs_mask
             print((self.obs_mask.shape, self.N_mesh))
-            assert (self.obs_mask.shape == self.N_mesh).all()
+            assert (np.array(self.obs_mask.shape) == self.N_mesh).all()
         else:
             self.obs_mask = None
 
@@ -2046,7 +2046,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 min_flux = min_flux(self.cat["cosmo_redshift"])
                 self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
             elif np.size(min_flux) > 1:
-                assert (np.shape(min_flux) == self.N_mesh).all()
+                assert (np.array(np.shape(min_flux)) == self.N_mesh).all()
                 self.cat["detected"] = apply_selection_function_by_position(self.cat['Position'],
                                                                             self.cat['flux'].to(
                                                                                 u.erg/u.s/u.cm**2).value,
@@ -2641,7 +2641,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 # if it is not a function, but a scalar or a numpy array we can skip the callable.
                 if np.size(self.sigma_noise) > 1:
                     try:
-                        assert (self.sigma_noise.shape == self.N_mesh).all()
+                        assert (np.array(self.sigma_noise.shape) == self.N_mesh).all()
                     except AssertionError:
                         logging.error(
                             f"{self.sigma_noise.shape=} but {self.N_mesh=}")
@@ -2705,7 +2705,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             np.size(self.sky_intensity_mesh[self.sky_intensity_mesh < 0.])/np.prod(self.N_mesh)))
         return self.sky_intensity_mesh.to(self.mean_intensity)
 
-    def bin_scipy(self, pkspec):
+    def bin_scipy(self, pkspec, return_nmodes=False):
         """
         Perform binning of the power spectrum.
 
@@ -2713,6 +2713,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ----------
         pkspec : ndarray
             The power spectrum mesh to be binned.
+        return_nmodes: bool
+            Set to true if you want to have the number of modes in each bin returned.
+            Default: False.
 
         Returns
         -------
@@ -2731,16 +2734,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         pkspec = np.concatenate(np.concatenate(pkspec))
 
         logging.info("Calculating summary statistics.")
-        (
-            mean_k,
-            monopole,
-            quadrupole,
-        ) = bin_scipy(pkspec, k_bins, kspec, muspec)
-        return (
-            mean_k,
-            monopole,
-            quadrupole,
-        )
+        return_tuple = bin_scipy(pkspec, k_bins, kspec, muspec, return_nmodes=return_nmodes) #(mean_k,monopole,quadrupole,(nmodes))
+        return return_tuple
 
     def _get_prepared_intensity_mesh(self, sky_subtraction):
         """
@@ -3036,7 +3031,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             raise ValueError(
                 "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
             )
-
+        
+        # if min_flux is a 3D array with the same shape as N_mesh,
+        # return the mean intensity of the mesh as a function of LOS distance
+        # because we can't make this calculation for each cell.
+        if (not callable(self.min_flux)):
+            if (np.array(np.shape(self.min_flux)) == self.N_mesh).all():
+                mean_intensity_per_redshift = np.mean(
+                    self.intensity_mesh, axis=(1, 2))
+                return mean_intensity_per_redshift
+            
         if galaxy_selection == "all":
             if tracer == "intensity":
                 integrated = quad(
@@ -3062,11 +3066,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 raise ValueError(
                     "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
                 )
-
-        elif (not callable(self.min_flux)) * (np.shape(self.min_flux) == self.N_mesh).all():
-            mean_intensity_per_redshift = np.mean(
-                self.intensity_mesh, axis=(1, 2))
-            return mean_intensity_per_redshift
 
         elif (galaxy_selection == "detected") or (galaxy_selection == "undetected"):
             mean_luminosity_density = []
