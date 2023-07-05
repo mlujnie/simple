@@ -433,7 +433,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mean_k,
             monopole,
             quadrupole,
-        ) = self.bin_scipy(model.real)
+            n_modes
+        ) = self.bin_scipy(model.real, return_nmodes=True)
 
         if save:
             with h5py.File(self.out_filename, "a") as ff:
@@ -446,6 +447,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 ff[f"{tracer}/k_bins"] = mean_k
                 ff[f"{tracer}/P_shot"] = P_shot_smoothed.to(self.Mpch**3).value
                 ff[f"{tracer}/S_bar"] = (S_bar * box_volume).to(self.Mpch**3).value
+                ff[f"{tracer}/n_modes"] = n_modes
                 logging.info("Done")
                 if return_3d:
                     return model, mean_k, monopole, quadrupole

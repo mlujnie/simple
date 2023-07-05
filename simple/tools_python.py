@@ -192,7 +192,7 @@ def get_checker_mask(N_mesh, N_cells=1):
     obs_mask = np.array([obs_mask_2d for i in range(N_mesh[0])])
     return obs_mask
 
-def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2):
+def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
     """
     Calculates the monopole and quadrupole (if lmax==2) power spectrum and mean k in the given k bins.
 
@@ -243,11 +243,15 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2):
     )
     logging.info("Calculated mean_k.")
 
-    return (
-        mean_k,
-        monopole,
-        5 * quadrupole,
-    )
+    if return_nmodes:
+        nmodes, k_edge, bin_number = binned_statistic(np.ones(kspec.shape), kspec, bins=k_bins, statistic='sum')
+        return mean_k, monopole, 5 * quadrupole, nmodes
+    else:
+        return (
+            mean_k,
+            monopole,
+            5 * quadrupole,
+        )
 
 def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     """
