@@ -30,6 +30,7 @@ from simple.tools_python import (
 )
 from simple.tools import catalog_to_mesh_cython
 from simple.tools import get_kspec_cython
+from simple.tools import apply_selection_function_by_position
 
 
 def aniso_filter(k, v):
@@ -135,21 +136,22 @@ def angular_tophat_filter(k, v):
     w = jinc(k_perp * rper) * 2
     return w * v
 
+
 class BasicBoxCalculator:
-    
+
     def __init__(self, redshift, box_size, N_mesh, single_redshift, cosmology):
         self.redshift = redshift
         self.box_size = box_size
         self.N_mesh = N_mesh
         self.single_redshift = single_redshift
         self.astropy_cosmo = cosmology
-        
+
         self.Mpch = u.Mpc / self.astropy_cosmo.h
-        
+
         self.voxel_length = self.box_size / self.N_mesh
-        
-        self.LOS = np.array([1,0,0])
-        
+
+        self.LOS = np.array([1, 0, 0])
+
     def get_comoving_distance_per_delta_z(self, mean_z, delta_z):
         """
         Calculates the comoving distance between (z + delta_z) and (z - delta_z).
@@ -171,7 +173,7 @@ class BasicBoxCalculator:
         return self.astropy_cosmo.comoving_distance(
             mean_z + delta_z
         ) - self.astropy_cosmo.comoving_distance(mean_z - delta_z)
-        
+
     @functools.cached_property
     def delta_redshift(self):
         """
@@ -205,14 +207,14 @@ class BasicBoxCalculator:
         )
         delta_z_per_comoving_distance = interp1d(comoving_distances, delta_zs)
         return delta_z_per_comoving_distance(LOS_LENGTH)
-    
+
     @functools.cached_property
     def minimum_distance(self):
         """ Calculates the minimum distance of a cell within the mesh (cached)."""
         return self.astropy_cosmo.comoving_distance(
             self.redshift - self.delta_redshift
         ).to(self.Mpch)
-    
+
     @functools.cached_property
     def redshift_mesh_axis(self):
         """ Calculates the redshift coordinates along the LOS axis (cached)."""
@@ -223,18 +225,16 @@ class BasicBoxCalculator:
         print("distances: ", distances)
         return z_at_value(self.astropy_cosmo.comoving_distance, distances).value
 
-    
     @functools.cached_property
     def mean_redshift(self):
         " Calculates the mean of the redshifts of the cells (cached)."
         return np.mean(self.redshift_mesh_axis)
-    
-    
+
     @functools.cached_property
     def k_Nyquist(self):
         """ Calculates the Nyquist frequency (cached)."""
         return np.pi / self.voxel_length
-    
+
     @functools.cached_property
     def box_volume(self):
         """ Calculates the volume of the simulation box.
@@ -332,6 +332,7 @@ class BasicBoxCalculator:
         if save_to_self:
             self.mesh_position = mesh_position
         return (mesh_position * self.Mpch).to(self.Mpch)
+
 
 class LognormalIntensityMock(BasicBoxCalculator):
     """
@@ -447,12 +448,15 @@ class LognormalIntensityMock(BasicBoxCalculator):
         If it is a function, it should take the redshift as input and should output the minimum flux
         (as an astropy quantity in flux units).
         If it is a string, it should be the name of the file
-        containing a table in ecsv format readable by astropy.table with 
-            - 'redshift' column: redshift
-            - 'min_flux' column: min_flux at that redshift,
-            - unit of 'min_flux': unit of the 'min_flux' column (automatic if saved using astropy.table).
-        In this case, it will interpolate between redshifts (in case a redshift is out of bounds,
-        the border values are used.)
+            * either containing a table in ecsv format readable by astropy.table with 
+                - 'redshift' column: redshift
+                - 'min_flux' column: min_flux at that redshift,
+                - unit of 'min_flux': unit of the 'min_flux' column (automatic if saved using astropy.table).
+                In this case, it will interpolate between redshifts (in case a redshift is out of bounds,
+                the border values are used.)
+            * or in hdf5 format with
+                - ff["min_flux"] : min_flux mesh with the same shape as N_mesh
+                - ff["min_flux"].attrs["unit"] should be the string of the astropy unit (e.g. "erg / (cm2 s)").
         Default: None. Then all galaxies are detected unless 'limit_ngal' is given.
 
     limit_ngal: astropy quantity, function, or string, optional
@@ -747,18 +751,28 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.min_flux = None
         if isinstance(self.min_flux, str):
             self.min_flux_file = self.min_flux
-            min_flux_table = Table.read(
-                self.min_flux, format="ascii.ecsv")
-            interp_min_flux = interp1d(
-                min_flux_table["redshift"],
-                min_flux_table["min_flux"],
-                fill_value=(min_flux_table['min_flux']
-                            [0], min_flux_table['min_flux'][-1]),
-                bounds_error=False
-            )
-            self.min_flux = (
-                lambda z: interp_min_flux(z) * min_flux_table["min_flux"].unit
-            )
+            try:  # see if we can read it as a table
+                min_flux_table = Table.read(
+                    self.min_flux, format="ascii.ecsv")
+                interp_min_flux = interp1d(
+                    min_flux_table["redshift"],
+                    min_flux_table["min_flux"],
+                    fill_value=(min_flux_table['min_flux']
+                                [0], min_flux_table['min_flux'][-1]),
+                    bounds_error=False
+                )
+                self.min_flux = (
+                    lambda z: interp_min_flux(
+                        z) * min_flux_table["min_flux"].unit
+                )
+            except Exception as e1:
+                try:  # see if we can read it as an hdf5 file
+                    with h5py.File(self.min_flux, "r") as ff:
+                        self.min_flux = ff['min_flux'] * \
+                            u.Unit(ff['min_flux'].attrs['unit'])
+                except Exception as e2:
+                    logging.error(
+                        "Could not read min_flux as a Table or hdf5 file:\n{}\n{}".format(e1, e2))
 
         if "limit_ngal" in input_dict.keys():
             self.limit_ngal = input_dict["limit_ngal"]
@@ -805,12 +819,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     lambda z: interp_sigma_noise(
                         z) * sigma_noise_table["sigma_noise"].unit
                 )
-            except Exception as e1: # try reading it as an hdf5 file.
+            except Exception as e1:  # try reading it as an hdf5 file.
                 try:
                     with h5py.File(self.sigma_noise, "r") as ff:
-                        self.sigma_noise = ff['sigma_noise'] * u.Unit(ff['sigma_noise'].attrs['unit'])
+                        self.sigma_noise = ff['sigma_noise'] * \
+                            u.Unit(ff['sigma_noise'].attrs['unit'])
                 except Exception as e2:
-                    logging.error("Could not read Table or hdf5 file:\n{}\n{}".format(e1, e2))
+                    logging.error(
+                        "Could not read sigma_noise as Table or hdf5 file:\n{}\n{}".format(e1, e2))
+
         if "lambda_restframe" in input_dict.keys():
             self.lambda_restframe = input_dict["lambda_restframe"]
             self.nu_restframe = None
@@ -1985,9 +2002,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         Parameters
         ----------
-        min_flux : float or function of redshift, optional
+        min_flux : astropy quantity, nd-array of floastropy quantities, or function of redshift, optional
             Flux limit of the (mock) observation above which galaxies are detected.
             If a function, it represents the flux limit as a function of redshift.
+            Units of flux (erg/s/cm**2) required.
             Either `min_flux` or `limit_ngal` must be provided.
         limit_ngal : float or function of redshift, optional
             Given number of galaxies per unit comoving volume above which galaxies are detected.
@@ -2010,9 +2028,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         """
 
         # Check if the galaxies have fluxes, otherwise compute them.
-        try:
-            self.cat["flux"][0]
-        except:
+        if not ("flux" in self.cat.keys()):
             self.assign_flux()
 
         logging.info("Applying selection function.")
@@ -2028,10 +2044,20 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             ):  # if the flux limit is a function of redshift/wavelength.
                 logging.info('min_flux is callable')
                 min_flux = min_flux(self.cat["cosmo_redshift"])
-            if not ("flux" in self.cat.keys()):
-                self.assign_flux()
-
-            self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
+                self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
+            elif np.size(min_flux) > 1:
+                assert (np.shape(min_flux) == self.N_mesh).all()
+                self.cat["detected"] = apply_selection_function_by_position(self.cat['Position'],
+                                                                            self.cat['flux'].to(
+                                                                                u.erg/u.s/u.cm**2).value,
+                                                                            min_flux.to(
+                                                                                u.erg/u.s/u.cm**2).value,
+                                                                            self.N_mesh,
+                                                                            self.box_size.to(self.Mpch))
+                self.cat['detected'] = np.array(
+                    self.cat['detected']).astype(bool)
+            else:
+                self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
 
         elif self.limit_ngal is not None:  # if instead limit_ngal was given as an input
             min_L_for_interpolation = self.Lmin.to(self.luminosity_unit).value
@@ -2606,8 +2632,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 los_axis = np.where(self.LOS == 1)[0][0]
                 assert los_axis == 0
                 redshifts = self.redshift_mesh_axis
-                sigma_per_redshift = self.sigma_noise(redshifts).to(self.mean_intensity).value
-                sigma = sigma_per_redshift[:,None,None] * np.ones(self.intensity_mesh.shape)
+                sigma_per_redshift = self.sigma_noise(
+                    redshifts).to(self.mean_intensity).value
+                sigma = sigma_per_redshift[:, None, None] * \
+                    np.ones(self.intensity_mesh.shape)
 
             else:
                 # if it is not a function, but a scalar or a numpy array we can skip the callable.
@@ -2615,13 +2643,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     try:
                         assert (self.sigma_noise.shape == self.N_mesh).all()
                     except AssertionError:
-                        logging.error(f"{self.sigma_noise.shape=} but {self.N_mesh=}")
+                        logging.error(
+                            f"{self.sigma_noise.shape=} but {self.N_mesh=}")
                 self.sigma_noise = self.sigma_noise.to(self.mean_intensity)
                 # in intensity or temperature units.
                 sigma = self.sigma_noise.value
 
             noise_mesh = da.random.normal(
-                loc=0, scale=sigma, size=tuple(self.N_mesh) # size has to be a tuple, not an array.
+                # size has to be a tuple, not an array.
+                loc=0, scale=sigma, size=tuple(self.N_mesh)
             )
         self.noise_mesh = (
             noise_mesh * self.mean_intensity).compute().to(self.mean_intensity)
@@ -3006,6 +3036,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             raise ValueError(
                 "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
             )
+
         if galaxy_selection == "all":
             if tracer == "intensity":
                 integrated = quad(
@@ -3031,6 +3062,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 raise ValueError(
                     "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
                 )
+
+        elif (not callable(self.min_flux)) * (np.shape(self.min_flux) == self.N_mesh).all():
+            mean_intensity_per_redshift = np.mean(
+                self.intensity_mesh, axis=(1, 2))
+            return mean_intensity_per_redshift
 
         elif (galaxy_selection == "detected") or (galaxy_selection == "undetected"):
             mean_luminosity_density = []
