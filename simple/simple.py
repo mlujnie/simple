@@ -222,7 +222,6 @@ class BasicBoxCalculator:
             self.minimum_distance
             + self.voxel_length[0] * (np.arange(self.N_mesh[0]) + 0.5)
         ).to(u.Mpc)
-        print("distances: ", distances)
         return z_at_value(self.astropy_cosmo.comoving_distance, distances).value
 
     @functools.cached_property
@@ -613,7 +612,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
             if input_dict["verbose"]:
                 level = logging.INFO
             else:
-                level = logging.ERROR
+                level = logging.WARNING
         else:
             level = logging.INFO
 
@@ -645,7 +644,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
                     cosmology, format="ascii.ecsv")
         elif isinstance(cosmology, dict):
             self.astropy_cosmo = FlatwCDM(**cosmology)
-            print("MNU: ", self.astropy_cosmo.m_nu)
+            logging.debug("MNU: ", self.astropy_cosmo.m_nu)
         else:
             self.astropy_cosmo = cosmology
 
@@ -2641,7 +2640,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 # if it is not a function, but a scalar or a numpy array we can skip the callable.
                 if np.size(self.sigma_noise) > 1:
                     try:
-                        assert (np.array(self.sigma_noise.shape) == self.N_mesh).all()
+                        assert (np.array(self.sigma_noise.shape)
+                                == self.N_mesh).all()
                     except AssertionError:
                         logging.error(
                             f"{self.sigma_noise.shape=} but {self.N_mesh=}")
@@ -2734,7 +2734,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         pkspec = np.concatenate(np.concatenate(pkspec))
 
         logging.info("Calculating summary statistics.")
-        return_tuple = bin_scipy(pkspec, k_bins, kspec, muspec, return_nmodes=return_nmodes) #(mean_k,monopole,quadrupole,(nmodes))
+        # (mean_k,monopole,quadrupole,(nmodes))
+        return_tuple = bin_scipy(
+            pkspec, k_bins, kspec, muspec, return_nmodes=return_nmodes)
         return return_tuple
 
     def _get_prepared_intensity_mesh(self, sky_subtraction):
@@ -3031,16 +3033,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             raise ValueError(
                 "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
             )
-        
+
         # if min_flux is a 3D array with the same shape as N_mesh,
         # return the mean intensity of the mesh as a function of LOS distance
         # because we can't make this calculation for each cell.
-        if (not callable(self.min_flux)) and (np.size(self.min_flux)>1):
+        if (not callable(self.min_flux)) and (np.size(self.min_flux) > 1):
             if (np.array(np.shape(self.min_flux)) == self.N_mesh).all():
                 mean_intensity_per_redshift = np.mean(
                     self.intensity_mesh, axis=(1, 2))
                 return mean_intensity_per_redshift
-            
+
         if galaxy_selection == "all":
             if tracer == "intensity":
                 integrated = quad(
