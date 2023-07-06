@@ -3035,7 +3035,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         # if min_flux is a 3D array with the same shape as N_mesh,
         # return the mean intensity of the mesh as a function of LOS distance
         # because we can't make this calculation for each cell.
-        if (not callable(self.min_flux)):
+        if (not callable(self.min_flux)) and (np.size(self.min_flux)>0):
             if (np.array(np.shape(self.min_flux)) == self.N_mesh).all():
                 mean_intensity_per_redshift = np.mean(
                     self.intensity_mesh, axis=(1, 2))
