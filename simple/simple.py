@@ -2690,8 +2690,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             .to(self.Mpch)
             .value
         )
+        intensity_map = self.intensity_mesh.to(self.mean_intensity).value
+        if self.noise_mesh is not None:
+            intensity_map = intensity_map + \
+                self.noise_mesh.to(self.mean_intensity).value
         intensity_realfield = make_map(
-            self.intensity_mesh.to(self.mean_intensity).value,
+            intensity_map,
             Nmesh=self.N_mesh,
             BoxSize=self.box_size.to(self.Mpch).value,
         )
