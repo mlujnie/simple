@@ -1,0 +1,37 @@
+verbose : False
+bias : 1.5
+redshift : 2.0
+single_redshift : False
+box_size : np.array([400,400,400]) * u.Mpc
+N_mesh : np.array([128,128,128])
+luminosity_unit : luminosity_unit
+Lmin : 2e41 * u.erg/u.s
+Lmax : np.inf * u.erg/u.s
+galaxy_selection : 
+  intensity : all
+  n_gal : detected
+lambda_restframe : 1215.67 * u.angstrom
+brightness_temperature : False
+do_spectral_smooth : True
+do_spectral_tophat_smooth : False
+do_angular_smooth : True
+sigma_beam : 6 * u.arcsec
+dlambda : 5 * u.angstrom
+footprint_radius : 9 * u.arcmin
+luminosity_function : "luminosity_function_example.csv"
+luminosity_unit : 1e42 * u.erg/u.s
+run_pk : 
+  intenisty : True
+  n_gal : True
+  cross : True
+  sky_subtracted_cross : True
+dk : 0.04
+kmin : 0.04
+kmax : 1.0
+seed_lognormal : 100
+outfile_prefix : 'mock'
+cosmology : Planck18
+RSD : True
+out_dir : "../tmp/mocks/"
+min_flux : 3e-17 * u.erg/u.s/u.cm**2
+sigma_noise : 2e-22 * u.erg/u.s/u.cm**2/u.angstrom/u.arcsec**2
