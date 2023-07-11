@@ -66,4 +66,4 @@ source_parsers = {
 
 source_suffix = ['.rst', '.md']
 
-autodoc_mock_imports = ['astropy', 'numpy', 'dask', 'scipy', 'h5py', 'pmesh']
+autodoc_mock_imports = ['astropy', 'numpy', 'dask', 'scipy', 'h5py', 'pmesh', 'psutil', 'random', 'os', 'logging']
