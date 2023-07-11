@@ -13,6 +13,7 @@ Welcome to SIMPLE's documentation!
    installation
    introduction
    input_formats
+   simple_reference
    support
 
 
