@@ -12,7 +12,7 @@ simple.config module
 simple.simple module
 -------------------------
 
-.. automodule:: simple.simple
+.. automodule:: simple
     :members:
     :undoc-members:
     :show-inheritance:
