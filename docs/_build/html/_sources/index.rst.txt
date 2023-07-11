@@ -10,6 +10,10 @@ Welcome to SIMPLE's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   installation
+   introduction
+   input_formats
+   support
 
 
 Indices and tables

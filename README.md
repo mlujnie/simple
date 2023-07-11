@@ -1,5 +1,11 @@
 # Simple Intensity Map Producer for Line Emission (SIMPLE)
 
+## Introduction
+
+Write something here.
+
+The latest documentation can be found here: https://simple-intensity-mapping-simulator.readthedocs.io/en/latest/.
+
 ## Setup
 * install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/:
       `git clone -b intensity-mapping https://bitbucket.org/komatsu5147/lognormal_galaxies/`
@@ -22,4 +28,3 @@
     * dask
     * pmesh
 * Status of the code and how it is maintained
-* License \check
