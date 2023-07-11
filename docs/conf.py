@@ -68,4 +68,5 @@ source_suffix = ['.rst', '.md']
 
 autodoc_mock_imports = ['astropy', 'numpy', 'dask', 'scipy', 
                         'h5py', 'pmesh', 'psutil', 'random',
-                        'os', 'logging', 'functools']
+                        'os', 'logging', 'functools',
+                       'simple', 'tools']
