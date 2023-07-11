@@ -609,6 +609,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
         self.input_dict = input_dict
 
         if "verbose" in input_dict.keys():
+            self.verbose = input_dict['verbose']
             if input_dict["verbose"]:
                 level = logging.INFO
             else:
@@ -1015,14 +1016,21 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         """
 
-        level = logging.INFO
-        FORMAT = "%(asctime)s simple %(levelname)s: %(message)s"
-        logging.basicConfig(format=FORMAT, level=level)
-        stream_handler = logging.StreamHandler(stream=sys.stdout)
-
-        logging.info("Initiating LognormalIntensityMock instance.")
-
         with h5py.File(filename, "r") as ff:
+            # initiate logger
+            if "verbose" in ff.attrs.keys():
+                if ff.attrs["verbose"]:
+                    level = logging.INFO
+                else:
+                    level = logging.WARNING
+            else:
+                level = logging.INFO
+            FORMAT = "%(asctime)s simple %(levelname)s: %(message)s"
+            logging.basicConfig(format=FORMAT, level=level)
+            stream_handler = logging.StreamHandler(stream=sys.stdout)
+
+            logging.info("Initiating LognormalIntensityMock instance.")
+
             # initiate cosmology
             logging.info("Loading cosmology.")
             astropy_cosmo_table = Table()
@@ -1196,7 +1204,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         attributes = []
         for attr in dir(self):
-            if attr.startswith("_") or (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh']):
+            if attr.startswith("_") or (attr in ['prepared_intensity_mesh', 'prepared_skysub_intensity_mesh', 'prepared_n_gal_mesh', "input_dict"]):
                 continue
             # don't leave it in one line with the previous because it may cause problems.
             elif callable(getattr(self, attr)):
