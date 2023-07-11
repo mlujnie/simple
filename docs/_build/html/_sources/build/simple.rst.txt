@@ -1,0 +1,61 @@
+simple package
+==============
+
+Submodules
+----------
+
+simple.config module
+--------------------
+
+.. automodule:: simple.config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+simple.pk\_3d\_model module
+---------------------------
+
+.. automodule:: simple.pk_3d_model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+simple.run\_lognormal\_galaxies module
+--------------------------------------
+
+.. automodule:: simple.run_lognormal_galaxies
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+simple.simple module
+--------------------
+
+.. automodule:: simple.simple
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+simple.tools module
+-------------------
+
+.. automodule:: simple.tools
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+simple.tools\_python module
+---------------------------
+
+.. automodule:: simple.tools_python
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: simple
+   :members:
+   :undoc-members:
+   :show-inheritance:
