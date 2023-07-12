@@ -3051,8 +3051,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         # because we can't make this calculation for each cell.
         if (not callable(self.min_flux)) and (np.size(self.min_flux) > 1):
             if (np.array(np.shape(self.min_flux)) == self.N_mesh).all():
-                mean_intensity_per_redshift = np.mean(
-                    self.intensity_mesh, axis=(1, 2))
+                if tracer == "intensity":
+                    mean_intensity_per_redshift = np.mean(
+                        self.intensity_mesh, axis=(1, 2))
+                elif tracer == 'n_gal':
+                    mean_intensity_per_redshift = np.mean(
+                        self.n_gal_mesh, axis=(1, 2))
+                else:
+                    raise ValueError(
+                        "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
+                    )
                 return mean_intensity_per_redshift
 
         if galaxy_selection == "all":
