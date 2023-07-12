@@ -13,6 +13,7 @@ Welcome to SIMPLE's documentation!
    installation
    introduction
    simple_tutorial_notebook/simple_tutorial_notebook
+   '../demo/simple_tutorial_notebook'
    input_formats
    simple_reference
    support

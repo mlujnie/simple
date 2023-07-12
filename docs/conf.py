@@ -17,6 +17,8 @@
 
 # -- Project information -----------------------------------------------------
 
+import sys
+import os
 project = 'SIMPLE'
 copyright = '2023, Maja Lujan Niemeyer, Jose Luis Bernal'
 author = 'Maja Lujan Niemeyer, Jose Luis Bernal'
@@ -30,7 +32,8 @@ release = '0.1.0'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.napoleon']
+extensions = ['sphinx.ext.autodoc',
+              'sphinx.ext.napoleon']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -55,18 +58,36 @@ html_static_path = ['_static']
 
 # added by Maja
 release = '0.1.0'
-import os
-import sys
 sys.path.insert(0, os.path.abspath('../simple/'))
 sys.path.insert(0, os.path.abspath('..'))
 
 source_parsers = {
-        '.md': 'recommonmark.parser.CommonMarkParser',
-    }
+    '.md': 'recommonmark.parser.CommonMarkParser',
+}
 
 source_suffix = ['.rst', '.md']
 
-autodoc_mock_imports = ['astropy', 'numpy', 'dask', 'scipy', 
+autodoc_mock_imports = ['astropy', 'numpy', 'dask', 'scipy',
                         'h5py', 'pmesh', 'psutil', 'random',
                         'os', 'logging', 'functools',
-                       'copy', 'sys', 'simple.tools'] #, 'tools_python','simple', 
+                        'copy', 'sys', 'simple.tools']  # , 'tools_python','simple',
+
+# latex support
+latex_engine = 'xelatex'
+latex_elements = {
+    'fontpkg': r'''
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
+''',
+    'preamble': r'''
+\usepackage[titles]{tocloft}
+\cftsetpnumwidth {1.25cm}\cftsetrmarg{1.5cm}
+\setlength{\cftchapnumwidth}{0.75cm}
+\setlength{\cftsecindent}{\cftchapnumwidth}
+\setlength{\cftsecnumwidth}{1.25cm}
+''',
+    'fncychap': r'\usepackage[Bjornstrup]{fncychap}',
+    'printindex': r'\footnotesize\raggedright\printindex',
+}
+latex_show_urls = 'footnote'

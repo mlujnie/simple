@@ -1,10 +1,17 @@
 SIMPLE tutorial
-================
+===============
 
 .. code:: ipython3
 
     %load_ext autoreload
     %autoreload 2
+
+
+.. parsed-literal::
+
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+
 
 .. code:: ipython3
 
@@ -158,7 +165,7 @@ luminosity function.
 
 .. parsed-literal::
 
-    2023-07-12 09:51:11,359 simple WARNING: We extrapolate the values outside of the provided tabulated values of L. 
+    2023-07-12 15:43:04,954 simple WARNING: We extrapolate the values outside of the provided tabulated values of L. 
     Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check the outcome!
 
 
@@ -198,6 +205,31 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     time ~/Documents/projects/playground/lognormal_galaxies/compute_pkG/calc_pkG ../tmp/mocks/inputs/mock_pkG.dat ../tmp/mocks/inputs/mock_Rh_xi.txt 2 1.5 10000.0
     time ~/Documents/projects/playground/lognormal_galaxies/compute_pkG/calc_pkG ../tmp/mocks/inputs/mock_mpkG.dat ../tmp/mocks/inputs/mock_Rh_xi.txt 2 1.0 10000.0
     time ~/Documents/projects/playground/lognormal_galaxies/generate_Poisson/gen_Poisson_mock_LogNormal ../tmp/mocks/inputs/mock_pkG.dat ../tmp/mocks/inputs/mock_mpkG.dat 0 ../tmp/mocks/inputs/mock_mpkG.dat 270.64000000000004 270.64000000000004 270.64000000000004 128 279657 100.27554429639554 ../tmp/mocks/inputs/mock_fnu.txt 1.5 19094 60232 59629 ../tmp/mocks//lognormal/mock_lognormal_rlz0.bin ../tmp/mocks//lognormal/mock_density_lognormal_rlz0.bin 0 1
+
+
+.. parsed-literal::
+
+    Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
+    
+    real	0m0.017s
+    user	0m0.005s
+    sys	0m0.006s
+    
+    real	0m0.035s
+    user	0m0.027s
+    sys	0m0.004s
+    
+    real	0m0.055s
+    user	0m0.016s
+    sys	0m0.006s
+    
+    real	0m0.022s
+    user	0m0.016s
+    sys	0m0.005s
+
+
+.. parsed-literal::
+
     -------------beginning generate_poisson---------------------
     Setting up the arrays.......
     n0,n1,n2=128	128	128
@@ -209,31 +241,6 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     Lz 270.64
     kF0 0.023216
     Generating mock density field in k-space
-
-
-.. parsed-literal::
-
-    Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
-    
-    real	0m0.014s
-    user	0m0.005s
-    sys	0m0.004s
-    
-    real	0m0.033s
-    user	0m0.026s
-    sys	0m0.003s
-    
-    real	0m0.021s
-    user	0m0.015s
-    sys	0m0.004s
-    
-    real	0m0.022s
-    user	0m0.015s
-    sys	0m0.004s
-
-
-.. parsed-literal::
-
     Finished generating mock density field.
     Doing FFT for density field.
     Done FFT for density field.
@@ -275,7 +282,7 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     Final nPoisson: 279646
     skip: calculate Pk
     Saving to ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5
-    Memory usage:  0.21370703125  GB.
+    Memory usage:  0.2001640625  GB.
     Edges of the galaxy coordinates:
     0.0001535299 270.63992
     0.0003810551 270.63953
@@ -290,9 +297,9 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
 .. parsed-literal::
 
     
-    real	0m0.197s
-    user	0m0.241s
-    sys	0m0.021s
+    real	0m0.205s
+    user	0m0.239s
+    sys	0m0.026s
 
 
 Assign the redshift
@@ -350,6 +357,8 @@ Check if the luminosity function is reproduced:
                 linestyle=':', color='gray', label='flux limit at zmin & zmax')
     plt.yscale("log")
     plt.xscale("log")
+    plt.xlabel(f"L [{str(luminosity_unit)}]")
+    plt.ylabel(r"PDF($L$)")
     plt.legend();
 
 

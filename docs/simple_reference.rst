@@ -41,6 +41,9 @@ simple.tools module
     :undoc-members:
     :show-inheritance:
 
+Unfortunately, the autodoc does not work for this module because it is written in Cython.
+Please look at the code itself for the docstrings: https://github.com/mlujnie/simple/blob/main/simple/tools.pyx
+
 simple.run\_lognormal\_galaxies module
 ---------------------------------------
 

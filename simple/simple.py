@@ -423,8 +423,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
         It will be converted to units of Mpc/h.
 
     N_mesh: array-like, optional
-        List containing the mesh size (3 numbers) used to generate the galaxy catalog,
-          meshes, and Fourier transforms.
+        List containing the mesh size (3 numbers) used to generate the galaxy catalog, meshes, and Fourier transforms.
         This is optional if voxel_length is given instead.
 
     voxel_length: astropy quantity array, optional
@@ -442,8 +441,9 @@ class LognormalIntensityMock(BasicBoxCalculator):
         This is only important when using the run() function, which runs everything automatically.
         If this class is used in a modular way, you can choose in each function.
 
-    min_flux: astropy quantity, function, or string, optional
+    min_flux: astropy quantity, array of astropy quantities, function, or string, optional
         If it is an astropy quantity, it denotes the minimum flux above which a galaxy is detected.
+        If it is an astropy quantity array in the shape of N_mesh, it denotes the minimum flux above which a galaxy is detected in each voxel.
         If it is a function, it should take the redshift as input and should output the minimum flux
         (as an astropy quantity in flux units).
         If it is a string, it should be the name of the file
@@ -1447,7 +1447,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         It does not take the selection function into account.
         Make sure that the luminosity function output is in units of
         luminosity_function: dn/dL
-        integral: $\int dn/dL dL = n_bar_gal$ in units of 1/Mpc**3
+        integral: 
+
+        .. math:: \\int \\frac{\\mathrm{d}n}{\\mathrm{d}L} \\mathrm{d}L = \\bar{n}_\\mathrm{g} [\\mathrm{Mpc}^{-3}]
+
         IMPORTANT: The luminosity function input has to be in units of [Mpc^-3 luminosity_unit^-1]
         so that \int dn/dl dL is in units of [Mpc^-3].
 
@@ -2019,11 +2022,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             If a function, it represents the number density limit as a function of redshift.
             Either `min_flux` or `limit_ngal` must be provided.
 
-        Raises
-        ------
-        ValueError
-            No min_flux or limit_ngal given.
-
         Returns
         -------
         None
@@ -2031,6 +2029,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Notes
         -----
         This function requires the galaxies to have assigned fluxes. If the fluxes are not assigned, they will be computed using the `assign_flux()` method.
+        If neither min_flux nor limit_ngal are given, all galaxies will be detected.
 
         """
 
@@ -2182,9 +2181,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.n_gal_detected / self.limit_ngal))
 
         else:
-            raise ValueError(
-                "You must provide a minimum flux (min_flux) or a given number galaxy density for detection (limit_ngal)!"
-            )
+            self.cat['detected'] = np.ones(lim.cat['flux'].shape, dtype=bool)
 
         logging.info("Fraction of detected galaxies: {}".format(
             len(self.cat['detected'][self.cat['detected']])/len(self.cat['detected'])))
@@ -3010,16 +3007,23 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         Calculates the mean intensity or the mean galaxy number density that we would expect
         at a given redshift of a given galaxy population (either all or detected/undetected galaxies).
         We use the integrals
-        $$\\bar{\\rho}_L(z) &= \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L} L$$
-        $\\bar{I}_\\lambda(z) = \\frac{c \\bar{\\rho}_L(z)}{4 \pi \lambda_0 H(z)}$
+
+        .. math:: \\bar{\\rho}_L(z) = \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\mathrm{d}n}{\mathrm{d}L} L
+        .. math:: \\bar{I}_\\lambda(z) = \\frac{c \\bar{\\rho}_L(z)}{4 \\pi \\lambda_0 H(z)}
         and
-        $\\bar{n}_\\mathrm{gal}(z) &= \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L}$,
+
+        .. math:: \\bar{n}_\\mathrm{gal}(z) = \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L}
+
         where
-        Lmin = self.Lmin for all galaxies or undetected galaxies
-               self.min_flux(z) * 4 * np.pi * D_L**2 for detected galaxies
+
+        ``Lmin = self.Lmin`` for all galaxies or undetected galaxies
+        or ``Lmin = self.min_flux(z) * 4 * np.pi * D_L**2`` for detected galaxies
         and
-        Lmax = self.Lmax for all galaxies or detected galaxies
-               self.min_flux(z) * 4 * np.pi * D_L**2 for undetected galaxies.
+        ``Lmax = self.Lmax`` for all galaxies or detected galaxies
+        ``Lmax = self.min_flux(z) * 4 * np.pi * D_L**2`` for undetected galaxies.
+
+        If min_flux is a mesh with the same size as N_mesh, 
+        it will return the mean of the intensity/n_gal mesh depending on the specified tracer.
 
         Parameters
         ----------
