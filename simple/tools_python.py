@@ -263,7 +263,7 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     """
     Bins the power spectrum into a grid of given k_bins in the perpendicular and parallel to the LOS directions.
 
-    Parameters:
+    Parameters
     -----------
     pkspec: array-like (1D)
         Power spectrum data to be binned.
@@ -276,7 +276,7 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
     k_perp: array-like (1D)
         Array of k_perpendicular values corresponding to pkspec.
 
-    Returns:
+    Returns
     --------
     P_k_2d: array
         Binned 2D power spectrum.
@@ -293,7 +293,7 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
     """
     Bins the power spectrum into a grid of given k_bins and mu_bins.
 
-    Parameters:
+    Parameters
     -----------
     pkspec: array-like (1D)
         Power spectrum data to be binned. Flattened 3D array.
@@ -308,7 +308,7 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
     mu_bins: array-like
         Array specifying the bin edges for mu values.
 
-    Returns:
+    Returns
     --------
     mean_k_2d: array
         Binned mean k values in the 2D grid.
