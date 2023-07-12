@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Write something here.
+![400](SIMPLE_pipeline.png)
 
 The latest documentation can be found here: https://simple-intensity-mapping-simulator.readthedocs.io/en/latest/.
 
