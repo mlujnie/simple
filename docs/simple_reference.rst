@@ -36,7 +36,7 @@ simple.tools\_python module
 simple.tools module
 -------------------------
 
-.. automodule:: simple.tools
+.. automodule:: tools
     :members:
     :undoc-members:
     :show-inheritance:
