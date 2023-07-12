@@ -21,6 +21,7 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
 * Build and install (with examples)
 * Dependencies
     * python 3.8 (for pmesh)
+    * cython
     * scipy
     * numpy
     * astropy
