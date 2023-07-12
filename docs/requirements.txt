@@ -1,2 +1,2 @@
-Cython
+Cython==0.29.36
 -e .
