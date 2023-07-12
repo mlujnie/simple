@@ -1,2 +1,3 @@
 Cython
 nbsphinx
+ipython
