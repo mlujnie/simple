@@ -2,18 +2,22 @@
 
 ## Introduction
 
-![400](SIMPLE_pipeline.png)
+Thank you for considering to use the SIMPLE code for your intensity map mocks!
+
+The Simple Intensity Map Producer for Line Emission (SIMPLE) is meant as a versatile tool to quickly generate intensity maps. It is introduced in this paper [link to the arxiv] and follows this basic pipeline:
+![400](docs/SIMPLE_pipeline.png)
 
 The latest documentation can be found here: https://simple-intensity-mapping-simulator.readthedocs.io/en/latest/.
 
-## Setup
-* install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/:
+## Installation
+1. Make sure you have a python environment with all the required packages (specified in the `environments.yaml` file.)
+2. install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/:
       `git clone -b intensity-mapping https://bitbucket.org/komatsu5147/lognormal_galaxies/`
       and follow installation instructions.
-* clone this repo 
+3. clone this repo 
     `git clone https://github.com/mlujnie/simple`.
-* modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
-* type `pip install .` in the root directory of this repo.
+4. modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
+5. type `pip install .` in the root directory of this repo.
 
 ### add following information: 
 * Brief description of features
