@@ -15,7 +15,7 @@ def check_dir_im(params):
     Creates the necessary directories for saving output files
     if they do not already exist.
 
-    Parameters:
+    Parameters
     -----------
     params: dict
         Dictionary containing the parameters passed to lognormal_galaxies,
@@ -80,7 +80,7 @@ def gen_inputs(params, exe):
     Then it runs compute_pkG/calc_pkG to calculate the Gaussian power spectrum for the matter field.
     Finally it runs compute_pkG/calc_pkG to calculate the Gaussian cross-power spectrum of the galaxy and matter fields.
 
-    Parameters:
+    Parameters
     -----------
     params: dict
         Dictionary containing the parameters for lognormal_galaxies.

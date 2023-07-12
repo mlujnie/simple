@@ -74,7 +74,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         Method to initiate a Power_Spectrum_Model object from a file
         containing a saved LognormalIntensityMock object.
 
-        Parameters:
+        Parameters
         -----------
         filename : str
             Name of the file containing the saved LognormalIntensityMock object.
@@ -90,7 +90,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
             Default is None/False.
 
-        Returns:
+        Returns
         --------
         instance : Power_Spectrum_Model
             An instance of the Power_Spectrum_Model class.
@@ -109,7 +109,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         Step in initializing the Power_Spectrum_Model instance.
 
-        Parameters:
+        Parameters
         -----------
         do_model_shot_noise : bool
             Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
@@ -247,7 +247,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         If self.RSD is True, it will return the Kaiser RSD approximation.
         Otherwise it will be just the bias squared times the matter power spectrum.
 
-        Returns:
+        Returns
         --------
         astropy quantity array
             The power spectrum Pm_kspec.
@@ -291,7 +291,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         Calculates the 3D power spectrum model P(k) by incorporating smoothing, convolution with the window function,
         and noise, and bins it in linear k bins.
 
-        Parameters:
+        Parameters
         -----------
         damping_function : array-like
             The damping function.
@@ -459,7 +459,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         Finally the model shot noise is given by the average of the power spectra
         of the shuffled meshes.
 
-        Parameters:
+        Parameters
         -----------
         N_real : int, optional
             Number of realizations of shuffled meshes. Default is 10.
