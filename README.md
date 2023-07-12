@@ -23,12 +23,12 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
 5. type `pip install .` in the root directory of this repo.
 
 ## Dependencies
-* see `environment.yaml`:
-    * python 3.8 (for pmesh)
-    * cython
-    * scipy
-    * numpy
-    * astropy
-    * h5py
-    * dask
-    * pmesh
+See `environment.yaml`:
+* python 3.8 (for pmesh)
+* cython
+* scipy
+* numpy
+* astropy
+* h5py
+* dask
+* pmesh
