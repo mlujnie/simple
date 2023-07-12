@@ -10,8 +10,8 @@ Welcome to SIMPLE's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   installation
    introduction
+   installation
    simple_tutorial_notebook/simple_tutorial_notebook
    '../demo/simple_tutorial_notebook'
    input_formats
