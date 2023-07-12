@@ -8,6 +8,8 @@ The Simple Intensity Map Producer for Line Emission (SIMPLE) is meant as a versa
 
 <img src="docs/SIMPLE_pipeline.png" alt="simple_pipeline" width="600"/>
 
+While you can specify everything necessary in the input file or dictionary and run this pipeline in one step (`lim.run()`), the code is structured in a modular way so that you can freely use components of the code to calculate whatever you want.
+
 The latest documentation can be found here: https://simple-intensity-mapping-simulator.readthedocs.io/en/latest/.
 
 ## Installation
@@ -20,11 +22,8 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
 4. modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
 5. type `pip install .` in the root directory of this repo.
 
-### add following information: 
-* Brief description of features
-* Usage (with examples)
-* Build and install (with examples)
-* Dependencies
+## Dependencies
+* see `environment.yaml`:
     * python 3.8 (for pmesh)
     * cython
     * scipy
@@ -33,4 +32,3 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
     * h5py
     * dask
     * pmesh
-* Status of the code and how it is maintained
