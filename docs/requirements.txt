@@ -1,2 +1,2 @@
-Cython
+cython
 -e .
