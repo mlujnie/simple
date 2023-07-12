@@ -31,7 +31,10 @@ sphinx:
 #    install:
 #    - requirements: docs/requirements.txt
 
-method: pip
-  path: .
-  extra_requirements:
-    - Cython
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - cython
+
