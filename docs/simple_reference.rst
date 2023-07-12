@@ -12,7 +12,7 @@ simple.config module
 simple.simple module
 -------------------------
 
-.. automodule:: simple
+.. automodule:: simple.simple
     :members:
     :undoc-members:
     :show-inheritance:
@@ -36,7 +36,7 @@ simple.tools\_python module
 simple.tools module
 -------------------------
 
-.. automodule:: tools
+.. automodule:: simple.tools
     :members:
     :undoc-members:
     :show-inheritance:
