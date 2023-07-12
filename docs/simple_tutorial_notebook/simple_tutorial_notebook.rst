@@ -1,5 +1,5 @@
-SIMPLE tutorial notebook
-========================
+SIMPLE tutorial
+================
 
 .. code:: ipython3
 
