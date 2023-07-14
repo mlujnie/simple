@@ -369,6 +369,12 @@ class LognormalIntensityMock(BasicBoxCalculator):
         If dict, it will attempt to initiate an astropy.cosmology.FlatwCDM object from the dict 
         (see https://docs.astropy.org/en/stable/api/astropy.cosmology.FlatwCDM.html#astropy.cosmology.FlatwCDM).
 
+    n_s: float
+        Value of the spectral index :math:`n_s` (part of the cosmology).
+
+    ln1010As: float
+        Value of :math:`\\mathrm{ln}(10^{10} A_s)` (part of the cosmology).
+
     luminosity_function: string or function
         If function, it should take the luminosity as an input (in units of luminosity_unit, but as a float)
         and return dn/dL as output (in units of 1/luminosity_unit * 1/Mpc**3).
@@ -648,6 +654,9 @@ class LognormalIntensityMock(BasicBoxCalculator):
             logging.debug("MNU: ", self.astropy_cosmo.m_nu)
         else:
             self.astropy_cosmo = cosmology
+
+        self.n_s = input_dict["n_s"]
+        self.lnAs = input_dict["ln1010As"]
 
         self.Mpch = u.Mpc / self.astropy_cosmo.h
         self.Mpch = self.Mpch.to(self.Mpch)
@@ -1537,8 +1546,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "mnu": np.sum(self.astropy_cosmo.m_nu.to(u.eV).value),
             "oc0h2": self.astropy_cosmo.Odm0 * self.astropy_cosmo.h**2,
             "ob0h2": self.astropy_cosmo.Ob0 * self.astropy_cosmo.h**2,
-            "ns": 0.9645,
-            "lnAs": 3.094,
+            "ns": self.n_s,  # 0.9645,
+            "lnAs": self.lnAs,  # 3.094,
             "h0": self.astropy_cosmo.H0 / (100 * u.km / u.s / u.Mpc),
             "w": self.astropy_cosmo.w(self.redshift),
             "run": 0.0,
