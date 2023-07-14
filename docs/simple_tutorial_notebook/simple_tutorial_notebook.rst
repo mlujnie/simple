@@ -6,13 +6,6 @@ SIMPLE tutorial
     %load_ext autoreload
     %autoreload 2
 
-
-.. parsed-literal::
-
-    The autoreload extension is already loaded. To reload it, use:
-      %reload_ext autoreload
-
-
 .. code:: ipython3
 
     import matplotlib.pyplot as plt
@@ -135,6 +128,8 @@ dictionary or from a yaml file that contains this dictionary.
                   "seed_lognormal" : 100,
                   "outfile_prefix" : 'mock',
                   "cosmology" : cosmo,
+                  "lnAs" : 3.094,
+                  "n_s" : 0.9645,
                   "RSD" : True,
                   "out_dir" : "../tmp/mocks/",
                   "min_flux" : 3e-17 * u.erg/u.s/u.cm**2,
@@ -165,7 +160,7 @@ luminosity function.
 
 .. parsed-literal::
 
-    2023-07-12 15:43:04,954 simple WARNING: We extrapolate the values outside of the provided tabulated values of L. 
+    2023-07-14 14:15:06,282 simple WARNING: We extrapolate the values outside of the provided tabulated values of L. 
     Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check the outcome!
 
 
@@ -205,31 +200,6 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     time ~/Documents/projects/playground/lognormal_galaxies/compute_pkG/calc_pkG ../tmp/mocks/inputs/mock_pkG.dat ../tmp/mocks/inputs/mock_Rh_xi.txt 2 1.5 10000.0
     time ~/Documents/projects/playground/lognormal_galaxies/compute_pkG/calc_pkG ../tmp/mocks/inputs/mock_mpkG.dat ../tmp/mocks/inputs/mock_Rh_xi.txt 2 1.0 10000.0
     time ~/Documents/projects/playground/lognormal_galaxies/generate_Poisson/gen_Poisson_mock_LogNormal ../tmp/mocks/inputs/mock_pkG.dat ../tmp/mocks/inputs/mock_mpkG.dat 0 ../tmp/mocks/inputs/mock_mpkG.dat 270.64000000000004 270.64000000000004 270.64000000000004 128 279657 100.27554429639554 ../tmp/mocks/inputs/mock_fnu.txt 1.5 19094 60232 59629 ../tmp/mocks//lognormal/mock_lognormal_rlz0.bin ../tmp/mocks//lognormal/mock_density_lognormal_rlz0.bin 0 1
-
-
-.. parsed-literal::
-
-    Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
-    
-    real	0m0.017s
-    user	0m0.005s
-    sys	0m0.006s
-    
-    real	0m0.035s
-    user	0m0.027s
-    sys	0m0.004s
-    
-    real	0m0.055s
-    user	0m0.016s
-    sys	0m0.006s
-    
-    real	0m0.022s
-    user	0m0.016s
-    sys	0m0.005s
-
-
-.. parsed-literal::
-
     -------------beginning generate_poisson---------------------
     Setting up the arrays.......
     n0,n1,n2=128	128	128
@@ -241,6 +211,31 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     Lz 270.64
     kF0 0.023216
     Generating mock density field in k-space
+
+
+.. parsed-literal::
+
+    Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
+    
+    real	0m0.015s
+    user	0m0.005s
+    sys	0m0.005s
+    
+    real	0m0.032s
+    user	0m0.026s
+    sys	0m0.003s
+    
+    real	0m0.022s
+    user	0m0.015s
+    sys	0m0.004s
+    
+    real	0m0.022s
+    user	0m0.016s
+    sys	0m0.004s
+
+
+.. parsed-literal::
+
     Finished generating mock density field.
     Doing FFT for density field.
     Done FFT for density field.
@@ -282,24 +277,22 @@ Run the lognormal galaxy simulation from lognognormal_galaxies and load the cata
     Final nPoisson: 279646
     skip: calculate Pk
     Saving to ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5
-    Memory usage:  0.2001640625  GB.
+    Memory usage:  0.21013671875  GB.
     Edges of the galaxy coordinates:
     0.0001535299 270.63992
     0.0003810551 270.63953
     0.00022548073 270.6387
     Overwriting Position in ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5.
     Overwriting Velocity in ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5.
-    Overwriting L_box in ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5.
-    Overwriting N_gal in ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5.
     Saved to ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5
 
 
 .. parsed-literal::
 
     
-    real	0m0.205s
+    real	0m0.197s
     user	0m0.239s
-    sys	0m0.026s
+    sys	0m0.021s
 
 
 Assign the redshift
@@ -399,7 +392,7 @@ If you want to work in real space, exchange ``RSD_Position`` with
     Mesh assignment: finished 1/279646.
     Mesh assignment: finished 100001/279646.
     Mesh assignment: finished 200001/279646.
-    2023-07-12 09:51:17,069 simple WARNING: The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length.
+    2023-07-14 14:15:13,108 simple WARNING: The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length.
 
 
 Plot the average intensity along the 3 different axes to visualize the
@@ -570,7 +563,7 @@ Initiate a LognormalIntensityMock instance from a file:
 
 .. parsed-literal::
 
-    2023-07-12 09:51:19,673 simple WARNING: We extrapolate the values outside of the provided tabulated values of L.
+    2023-07-14 14:15:17,289 simple WARNING: We extrapolate the values outside of the provided tabulated values of L.
     Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check the outcome!
 
 
@@ -711,21 +704,21 @@ complete:
 
     Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
     
-    real	0m0.015s
+    real	0m0.014s
     user	0m0.005s
     sys	0m0.005s
     
-    real	0m0.033s
+    real	0m0.035s
     user	0m0.027s
-    sys	0m0.004s
-    
-    real	0m0.021s
-    user	0m0.015s
     sys	0m0.004s
     
     real	0m0.022s
     user	0m0.015s
     sys	0m0.004s
+    
+    real	0m0.023s
+    user	0m0.016s
+    sys	0m0.005s
 
 
 .. parsed-literal::
@@ -771,7 +764,7 @@ complete:
     Final nPoisson: 279646
     skip: calculate Pk
     Saving to ../tmp/mocks/lognormal/mock_lognormal_rlz0.h5
-    Memory usage:  0.56458984375  GB.
+    Memory usage:  0.54898046875  GB.
     Edges of the galaxy coordinates:
     0.0001535301 270.64026
     0.0003810556 270.63986
@@ -784,9 +777,9 @@ complete:
 .. parsed-literal::
 
     
-    real	0m0.197s
+    real	0m0.198s
     user	0m0.242s
-    sys	0m0.024s
+    sys	0m0.026s
 
 
 .. parsed-literal::
@@ -794,6 +787,9 @@ complete:
     Mesh assignment: finished 1/279646.
     Mesh assignment: finished 100001/279646.
     Mesh assignment: finished 200001/279646.
-    2023-07-12 09:51:23,729 simple WARNING: The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length.
+    2023-07-14 14:15:21,679 simple WARNING: The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length.
     Mesh assignment: finished 1/55934.
+
+
+
 

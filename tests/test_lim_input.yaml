@@ -49,7 +49,7 @@ calc_pk_lognormal : True
 luminosity_function : './tests/input/luminosity_function_example.csv'
 #cosmology : 'Planck18'
 cosmology : "./tests/input/example_cosmology.ecsv"
-ln1010As : 3.094
+lnAs : 3.094
 n_s : 0.9645
 input_pk_filename : "./tests/input/example_pk.dat"
 #    m_nu : [0., 0., 0.06] # quantity-like ['energy', 'mass'] or array-like, optional

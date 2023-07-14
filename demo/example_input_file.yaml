@@ -31,8 +31,8 @@ kmax : 1.0
 seed_lognormal : 100
 outfile_prefix : 'mock'
 cosmology : Planck18
-ns : 0.9645
-ln1010As : 3.094
+n_s : 0.9645
+lnAs : 3.094
 RSD : True
 out_dir : "../tmp/mocks/"
 min_flux : 3e-17 * u.erg/u.s/u.cm**2

@@ -372,7 +372,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
     n_s: float
         Value of the spectral index :math:`n_s` (part of the cosmology).
 
-    ln1010As: float
+    lnAs: float
         Value of :math:`\\mathrm{ln}(10^{10} A_s)` (part of the cosmology).
 
     luminosity_function: string or function
@@ -656,7 +656,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
             self.astropy_cosmo = cosmology
 
         self.n_s = input_dict["n_s"]
-        self.lnAs = input_dict["ln1010As"]
+        self.lnAs = input_dict["lnAs"]
 
         self.Mpch = u.Mpc / self.astropy_cosmo.h
         self.Mpch = self.Mpch.to(self.Mpch)

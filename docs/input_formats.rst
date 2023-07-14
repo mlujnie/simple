@@ -54,6 +54,8 @@ An example dictionary could look like this, where ``luminosity_function`` is a f
               "seed_lognormal" : 100,
               "outfile_prefix" : 'mock',
               "cosmology" : cosmo,
+              "lnAs" : 3.094,
+              "n_s" : 0.9645,
               "RSD" : True,
               "out_dir" : "../tmp/mocks/",
               "min_flux" : 3e-17 * u.erg/u.s/u.cm**2,
@@ -103,6 +105,8 @@ An example yaml file could look like this, where ``np`` will be interpreted as `
     seed_lognormal : 100
     outfile_prefix : 'mock'
     cosmology : Planck18
+    n_s : 0.9645
+    lnAs : 3.094
     RSD : True
     out_dir : "../tmp/mocks/"
     min_flux : 3e-17 * u.erg/u.s/u.cm**2
@@ -118,6 +122,8 @@ If your input version is a yaml file, the possible options for the ``cosmology``
 #. or a dictionary that can be interpreted by astropy as a ``astropy.cosmology.FlatwCDM`` object (see https://docs.astropy.org/en/stable/api/astropy.cosmology.FlatwCDM.html#astropy.cosmology.FlatwCDM).
 
 If your input is a dictionary, you can also define your astropy cosmology within python and use this cosmology in the dictionary.
+
+You will have to provide a value for the spectral index :math:`n_s` and for :math:`\ln(10^{10}A_s)` separately in the input dictionary or file because they are not part of astropy cosmology.
 
 Luminosity function
 ====================
