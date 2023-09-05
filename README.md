@@ -34,4 +34,4 @@ See `environment.yaml`:
 * pmesh
 
 ## Acknowledging SIMPLE
-If you have used the SIMPLE code in your work, please cite the paper (https://arxiv.org/abs/2307.08475) or the DOI of the deposited code on Zenodo (http://doi.org/10.3847/1538-4357/ac5cb8).
+If you have used the SIMPLE code in your work, please cite the paper (https://arxiv.org/abs/2307.08475) or the DOI of the deposited code on Zenodo (http://doi.org/10.5281/zenodo.8319528).
