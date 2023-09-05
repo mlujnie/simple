@@ -17,6 +17,7 @@ Welcome to SIMPLE's documentation!
    input_formats
    simple_reference
    support
+   acknowledgement
 
 
 Indices and tables

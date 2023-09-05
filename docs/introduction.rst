@@ -5,7 +5,7 @@ Introduction
 Thank you for considering to use the SIMPLE code for your intensity map mocks!
 
 The Simple Intensity Map Producer for Line Emission (SIMPLE) is meant as a versatile tool to quickly generate intensity maps.
-It is introduced in this paper [link to the arxiv] and follows this basic pipeline:
+It is introduced in this paper https://arxiv.org/abs/2307.08475 and follows this basic pipeline:
 
 .. image:: SIMPLE_pipeline.png
   :width: 600
