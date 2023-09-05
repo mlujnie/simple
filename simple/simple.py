@@ -562,6 +562,7 @@ class LognormalIntensityMock(BasicBoxCalculator):
     seed_lognormal: int, optional
         Seed for the (random) generation of the lognormal galaxy catalog and the noise.
         It it is the same twice, you should get the same results.
+        If None, the code will generate a random positive integer.
         Default: None
 
     run_pk: dictionary, optional
@@ -884,6 +885,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.seed_lognormal = input_dict["seed_lognormal"]
         else:
             self.seed_lognormal = None
+        if self.seed_lognormal is None:
+            self.seed_lognormal = np.random.randint(2**32 - 1)
         try:
             self.run_pk = input_dict["run_pk"]
         except:

@@ -38,7 +38,7 @@ dk : 0.04
 kmin : 0.04
 kmax : 1.
 
-seed_lognormal : 0
+seed_lognormal : None
 outfile_prefix : 'test'
 out_dir : './tests/tmp/'
 
