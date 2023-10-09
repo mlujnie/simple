@@ -36,7 +36,7 @@ def catalog_to_mesh_cython(Positions,
         ix = int(np.floor(Positions[i,0] / voxel_size[0]))
         iy = int(np.floor(Positions[i,1] / voxel_size[1]))
         iz = int(np.floor(Positions[i,2] / voxel_size[2]))
-        if (ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh - 1):
+        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
             continue
         mesh[ix, iy, iz] += Weights[i]
     return mesh
