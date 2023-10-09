@@ -186,6 +186,15 @@ def gen_Poisson(i, params, seed1, seed2, seed3, exe):
         + ".bin"
     )
 
+    params_tmp["Velocityfname"] = (
+        params["out_dir"]
+        + "/lognormal/"
+        + params["ofile_prefix"]
+        + "_velocity_lognormal_rlz"
+        + str(i)
+        + ".bin"
+    )
+
     # field generation
     args = [
         "pkg_fname",
@@ -207,6 +216,8 @@ def gen_Poisson(i, params, seed1, seed2, seed3, exe):
         "Densityfname",
         "output_matter",
         "output_gal",
+        "Velocityfname",
+        "output_velocity"
     ]  # do not change the order
     exe.run(
         os.path.join(main_lognormal_path, "generate_Poisson/gen_Poisson_mock_LogNormal"),

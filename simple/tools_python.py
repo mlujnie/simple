@@ -362,3 +362,14 @@ def make_map(m, Nmesh, BoxSize, type="real"):
     field = pm.create(type=type)
     field[...] = m
     return field
+
+def read_velocity_bin_file(bin_filename):
+    L_dtype = np.dtype(np.double)
+    N_mesh_dtype = np.dtype(np.intc)
+    v_dtype = np.dtype(np.longdouble)
+
+    Lx, Ly, Lz = np.fromfile(bin_filename, dtype=np.double, count=3, offset=0)
+    Nx, Ny, Nz = np.fromfile(bin_filename, dtype=N_mesh_dtype, count=3, offset=L_dtype.itemsize*3)
+    veldata = np.fromfile(bin_filename, dtype=np.double, count=3 * Nx * Ny * Nz, offset=L_dtype.itemsize*3 + N_mesh_dtype.itemsize*3)
+    veldata = np.reshape(veldata, (Nx, Ny, Nz, 3))
+    return veldata[:,:,:,0]
