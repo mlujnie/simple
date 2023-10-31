@@ -32,11 +32,12 @@ def catalog_to_mesh_cython(Positions,
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
     N_gal = np.shape(Positions)[0]
+    assert np.shape(Weights)[0] == N_gal
     for i in range(N_gal):
         ix = int(np.floor(Positions[i,0] / voxel_size[0]))
         iy = int(np.floor(Positions[i,1] / voxel_size[1]))
         iz = int(np.floor(Positions[i,2] / voxel_size[2]))
-        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
+        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)) or (ix < 0) or (iy < 0) or (iz < 0):
             continue
         mesh[ix, iy, iz] += Weights[i]
     return mesh
