@@ -2841,6 +2841,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
             :, None, None]
         galaxy_map = (self.n_gal_mesh / mean_ngal_per_z).to(1) - 1.
+        galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
                                      Nmesh=self.N_mesh,
                                      BoxSize=self.box_size.to(self.Mpch).value,
