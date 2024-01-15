@@ -444,10 +444,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                                          box_volume).to(self.Mpch**3).value
                 ff[f"{tracer}/n_modes"] = n_modes
                 logging.info("Done")
-                if return_3d:
-                    return model, mean_k, monopole, quadrupole
-                else:
-                    return mean_k, monopole, quadrupole
+            if return_3d:
+                return model, mean_k, monopole, quadrupole
+            else:
+                return mean_k, monopole, quadrupole
 
     def model_shot_noise(self, N_real=10):
         """

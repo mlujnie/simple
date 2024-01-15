@@ -1516,7 +1516,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Cached like a property self.n_gal_detected."""
         return (self.N_gal_detected / self.box_volume).to(1 / u.Mpc**3)
 
-    def run_lognormal_simulation_cpp(self, output_velocity=0):
+    def run_lognormal_simulation_cpp(self, output_velocity=0, output_matter=0):
         """
         Calculates the power spectrum from input cosmology
         and runs lognormal simulation in lognormal_galaxies.
@@ -1576,7 +1576,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "calc_pk": self.calc_pk_lognormal,
             "calc_cpk": False,
             "use_cpkG": 0,
-            "output_matter": 0,
+            "output_matter": output_matter,
             "output_gal": 1,
             "output_velocity": output_velocity,
             "calc_mode_pk": 0,
