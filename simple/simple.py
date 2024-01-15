@@ -1477,17 +1477,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         """
 
         logging.info("Getting mean galaxy number density.")
-        integrated = quad(
-            self.luminosity_function,
-            self.Lmin.to(self.luminosity_unit).value,
-            self.Lmax.to(self.luminosity_unit).value,
-        )
-        logging.info(
-            "Integration result and uncertainty (should be much smaller than result!): {}".format(
-                integrated
-            )
-        )
-        n_bar_gal = (integrated[0] * u.Mpc ** (-3)).to(u.Mpc ** (-3))
+        L_values = np.logspace(np.log10(self.Lmin.to(self.luminosity_unit).value),
+                               np.log10(self.Lmax.to(self.luminosity_unit).value),
+                               10000)
+        integrated = np.trapz(self.luminosity_function(L_values), L_values)
+        n_bar_gal = (integrated * u.Mpc ** (-3)).to(u.Mpc ** (-3))
         logging.info("Done.")
         return n_bar_gal
 
@@ -2092,9 +2086,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 1000,
             )
             n_gal_of_Lmin = [
-                quad(self.luminosity_function, Lmin_tmp,
-                     max_L_for_interpolation)[0]
-                for Lmin_tmp in Ls
+                np.trapz(self.luminosity_function(Ls[i:]), Ls[i:])
+                for i in range(len(Ls))
             ]
             interp_n_gal_of_Lmin = interp1d(n_gal_of_Lmin, Ls)
             if callable(self.limit_ngal):
@@ -2154,21 +2147,17 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 N = len(min_fluxes_for_interpolation)
                 redshift_mesh_axis = self.redshift_mesh_axis
                 for mf in min_fluxes_for_interpolation:
+                    Ls_of_z = [np.logspace( np.log10((  mf
+                                                        * 4
+                                                        * np.pi
+                                                        * self.astropy_cosmo.luminosity_distance(z) ** 2
+                                                        ).to(self.luminosity_unit).value), 
+                                            np.log10(max_L_for_interpolation), 1000) for z in redshift_mesh_axis]
                     n_bar = np.mean(
                         [
-                            quad(
-                                self.luminosity_function,
-                                (
-                                    mf
-                                    * 4
-                                    * np.pi
-                                    * self.astropy_cosmo.luminosity_distance(z) ** 2
-                                )
-                                .to(self.luminosity_unit)
-                                .value,
-                                max_L_for_interpolation,
-                            )[0]
-                            for z in redshift_mesh_axis
+                            np.trapz(
+                                self.luminosity_function(Ls_of_z[i]), Ls_of_z[i])
+                            for i in range(len(redshift_mesh_axis))
                         ]
                     )
                     n_bars.append(n_bar)
@@ -3083,18 +3072,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         if (galaxy_selection == "all") or (self.min_flux is None):
             if tracer == "intensity":
-                integrated = quad(
-                    self.luminosity_function_times_L,
-                    self.Lmin.to(self.luminosity_unit).value,
-                    self.Lmax.to(self.luminosity_unit).value,
-                )
-                logging.info(
-                    "Integration result and uncertainty (should be much smaller than result!): {}".format(
-                        integrated
-                    )
+                Ls = np.logspace(np.log10(self.Lmin.to(self.luminosity_unit).value),
+                                 np.log10(self.Lmax.to(self.luminosity_unit).value),
+                                 10000)
+                integrated = np.trapz(
+                    self.luminosity_function_times_L(Ls), Ls
                 )
                 mean_luminosity_density = (
-                    integrated[0] * u.Mpc ** (-3) * self.luminosity_unit
+                    integrated * u.Mpc ** (-3) * self.luminosity_unit
                 ).to(u.Mpc ** (-3) * self.luminosity_unit)
             elif tracer == "n_gal":
                 return (
@@ -3127,22 +3112,22 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 else:
                     int_L_min = self.Lmin.to(self.luminosity_unit).value
                     int_L_max = int_L_limit.value
+                Ls = np.logspace(np.log10(int_L_min), np.log10(int_L_max), 10000)
                 if tracer == "intensity":
-                    integrated = quad(
-                        self.luminosity_function_times_L, int_L_min, int_L_max
+                    integrated = np.trapz(
+                        self.luminosity_function_times_L(Ls), Ls
                     )
                     mean_luminosity_density.append(
-                        (integrated[0] * u.Mpc ** (-3) * self.luminosity_unit)
+                        (integrated * u.Mpc ** (-3) * self.luminosity_unit)
                         .to(u.Mpc ** (-3) * self.luminosity_unit)
                         .value
                     )
                     mean_luminosity_density_unit = u.Mpc ** (-3) * \
                         self.luminosity_unit
                 elif tracer == "n_gal":
-                    integrated = quad(self.luminosity_function,
-                                      int_L_min, int_L_max)
+                    integrated = np.trapz(self.luminosity_function(Ls), Ls)
                     mean_luminosity_density.append(
-                        (integrated[0] * u.Mpc ** (-3)).to(u.Mpc ** (-3)).value
+                        (integrated * u.Mpc ** (-3)).to(u.Mpc ** (-3)).value
                     )
                     mean_luminosity_density_unit = u.Mpc ** (-3)
             mean_luminosity_density = (
