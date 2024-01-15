@@ -32,13 +32,22 @@ def catalog_to_mesh_cython(Positions,
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
     N_gal = np.shape(Positions)[0]
+    print("N_gal: ", N_gal)
+    assert np.shape(Weights)[0] == N_gal
+    too_highs = 0
+    too_lows = 0
     for i in range(N_gal):
         ix = int(np.floor(Positions[i,0] / voxel_size[0]))
         iy = int(np.floor(Positions[i,1] / voxel_size[1]))
         iz = int(np.floor(Positions[i,2] / voxel_size[2]))
         if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
+            too_highs += 1
+            continue
+        if (ix < 0) or (iy < 0) or (iz < 0):
+            too_lows += 1
             continue
         mesh[ix, iy, iz] += Weights[i]
+    print("{} too high, {} too low out of {}.".format(too_highs, too_lows, N_gal))
     return mesh
 
 def apply_selection_function_by_position(Positions,

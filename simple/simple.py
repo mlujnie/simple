@@ -2194,7 +2194,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.n_gal_detected / self.limit_ngal))
 
         else:
-            self.cat['detected'] = np.ones(lim.cat['flux'].shape, dtype=bool)
+            self.cat['detected'] = np.ones(self.cat['flux'].shape, dtype=bool)
 
         logging.info("Fraction of detected galaxies: {}".format(
             len(self.cat['detected'][self.cat['detected']])/len(self.cat['detected'])))
@@ -2642,7 +2642,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Getting noise mesh.")
 
         if self.sigma_noise == None:
-            self.noise_mesh = da.zeros(self.intensity_mesh.shape)
+            noise_mesh = da.zeros(self.intensity_mesh.shape)
         else:
             da.random.seed(self.seed_lognormal)
             if callable(self.sigma_noise):
@@ -2841,6 +2841,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
             :, None, None]
         galaxy_map = (self.n_gal_mesh / mean_ngal_per_z).to(1) - 1.
+        galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
                                      Nmesh=self.N_mesh,
                                      BoxSize=self.box_size.to(self.Mpch).value,
@@ -3080,7 +3081,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     )
                 return mean_intensity_per_redshift
 
-        if galaxy_selection == "all":
+        if (galaxy_selection == "all") or (self.min_flux is None):
             if tracer == "intensity":
                 integrated = quad(
                     self.luminosity_function_times_L,
