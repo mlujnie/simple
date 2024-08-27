@@ -1184,7 +1184,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         with h5py.File(catalog_filename, "r") as ff:
             cat = {}
             for cat_key in ff.keys():
-                if cat_key in ["L_box", "N_gal"]:
+                if cat_key in ["L_box", "N_gal", ""]:
                     continue
                 cat[cat_key] = np.array(ff[cat_key][:])
                 if "unit" in ff[cat_key].attrs.keys():
@@ -2396,6 +2396,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 mean_signal = np.mean(signal)
                 signal = signal.to(mean_signal)
             else:
+                logging.info(f"{Vcell_true=}")
+                logging.info(f"{rest_wave_or_freq=}")
+                logging.info(f"{Hubble=}")
                 signal = (
                     const.c
                     / (4.0 * np.pi * rest_wave_or_freq * Hubble * (1.0 * u.sr))
@@ -2405,7 +2408,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 signal = signal.to(
                     u.erg / (u.s * u.cm**2 * u.arcsec**2 * unit_wave_or_freq)
                 )
-                mean_signal = np.mean(signal)
+                logging.info(f"Nans in signal? {~np.all(np.isfinite(signal))}")
+                mean_signal = np.nanmean(signal)
                 signal = signal.to(mean_signal)
         elif tracer == "n_gal":
             signal = (np.ones(self.cat[position][mask].shape[0]) / Vcell_true).to(
