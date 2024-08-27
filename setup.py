@@ -3,7 +3,7 @@ from Cython.Build import cythonize
 
 setup(
     name='simple',
-    version='0.2.1',    
+    version='0.2.2',    
     description='Simple Intensity Map Producer for Line Emission',
     url='https://github.com/mlujnie/simple',
     author='Maja Lujan Niemeyer',

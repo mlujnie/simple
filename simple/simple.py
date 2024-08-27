@@ -699,7 +699,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         else:
             self.Lmax = np.inf * self.luminosity_unit
         if not np.isfinite(self.Lmax):
-            self.Lmax = 1e7 * self.Lmin
+            self.Lmax = 1e10 * self.Lmin
             logging.info("Lmax was input as infinite. We changed it to {}.".format(self.Lmax))
 
         # initiate input pk filename if given, None otherwise
