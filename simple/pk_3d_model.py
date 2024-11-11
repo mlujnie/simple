@@ -892,7 +892,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         )
         return mean_k, monopole, quadrupole
 
-    def get_cross_model(self, sky_subtraction=False):
+    def get_cross_model(self, sky_subtraction=False, return_3d = False):
         """
         Calculate and save the power spectrum model for the intensity-galaxy number density cross-power spectrum.
 
@@ -940,11 +940,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         else:
             tracer = "cross"
         logging.info("Calculating multipoles.")
-        (
-            mean_k,
-            monopole,
-            quadrupole,
-        ) = self.get_3d_pk_model(
+
+        result_tuple= self.get_3d_pk_model(
             damping_function,
             P_shot_cross,
             0.0,
@@ -956,8 +953,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mask_window_function_2=mask_window_function_2,
             save=True,
             tracer=tracer,
+            return_3d=return_3d
         )
-        return mean_k, monopole, quadrupole
+        if return_3d:
+            (model,
+             mean_k,
+             monopole,
+             quadrupole,
+             ) = result_tuple
+        else:
+            (
+                mean_k,
+                monopole,
+                quadrupole,
+            ) = result_tuple
+        return result_tuple
 
     def get_model(self, tracer):
         """ 

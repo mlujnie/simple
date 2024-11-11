@@ -2405,6 +2405,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     * self.cat[luminosity][mask]
                     / Vcell_true
                 )
+                if self.lambda_restframe is not None:
+                    logging.info("Applying correct (1+z)^(-2) factor to I_lambda.")
+                    signal = signal / (1 + Zhalo)**2
                 signal = signal.to(
                     u.erg / (u.s * u.cm**2 * u.arcsec**2 * unit_wave_or_freq)
                 )
@@ -3019,7 +3022,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         We use the integrals
 
         .. math:: \\bar{\\rho}_L(z) = \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\mathrm{d}n}{\mathrm{d}L} L
-        .. math:: \\bar{I}_\\lambda(z) = \\frac{c \\bar{\\rho}_L(z)}{4 \\pi \\lambda_0 H(z)}
+        .. math:: \\bar{I}_\\lambda(z) = \\frac{c \\bar{\\rho}_L(z)}{4 \\pi \\lambda_0 H(z) (1+z)^2}
         and
 
         .. math:: \\bar{n}_\\mathrm{gal}(z) = \\int_{L_\\mathrm{min}}^{L_\\mathrm{max}} dL\, \\frac{\\mathrm{d}n}{\\mathrm{d}L}
@@ -3176,6 +3179,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 / (4.0 * np.pi * rest_wave_or_freq * Hubble * (1.0 * u.sr))
                 * mean_luminosity_density
             )
+            if self.lambda_restframe is not None:
+                logging.info("Applying correct (1+z)^(-2) factor to I_lambda.")
+                mean_intensity_per_redshift = mean_intensity_per_redshift / (1 + redshifts)**2
 
         return mean_intensity_per_redshift
 

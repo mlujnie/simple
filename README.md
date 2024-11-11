@@ -12,6 +12,8 @@ While you can specify everything necessary in the input file or dictionary and r
 
 The latest documentation can be found here: https://simple-intensity-mapping-simulator.readthedocs.io/en/latest/.
 
+**Warning:** Equation (4) in the paper is missing a factor of $(1+z)^{-2}$. We corrected this in the code version 1.0.0.
+
 ## Installation
 1. Make sure you have a python environment with all the required packages (specified in the `environments.yaml` file.)
 2. install intensity-mapping branch of lognormal_galaxies code from https://bitbucket.org/komatsu5147/lognormal_galaxies/src/master/:
