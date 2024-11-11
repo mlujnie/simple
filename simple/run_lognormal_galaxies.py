@@ -216,8 +216,8 @@ def gen_Poisson(i, params, seed1, seed2, seed3, exe):
         "Densityfname",
         "output_matter",
         "output_gal",
-        #"Velocityfname",
-        #"output_velocity"
+        "Velocityfname",
+        "output_velocity"
     ]  # do not change the order
     exe.run(
         os.path.join(main_lognormal_path, "generate_Poisson/gen_Poisson_mock_LogNormal"),
