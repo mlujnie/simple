@@ -652,7 +652,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                     integral * self.luminosity_unit**2 / u.Mpc**3
                 )
                 factor = const.c / (
-                    4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr)
+                    4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr)  * (1 + redshift)**2
                 )
                 int_sec_mom = rho_L_second_moment * factor**2 * H_sq_inv
                 int_sec_mom = int_sec_mom * np.mean(self.obs_mask[i]**2)
@@ -678,7 +678,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             )
             mean_H_sq_inv_times_masksq = np.mean(
                 1 /
-                self.astropy_cosmo.H(self.redshift_mesh_axis) ** 2
+                ( self.astropy_cosmo.H(self.redshift_mesh_axis) ** 2
+                    * (1 + self.redshift_mesh_axis)**4 )
                 * np.mean(self.obs_mask**2, axis=(1, 2)),
             )
             rho_L_second_moment = integral * self.luminosity_unit**2 / u.Mpc**3
