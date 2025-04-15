@@ -77,6 +77,16 @@ def print_memory_usage():
     print("Memory usage: ", process.memory_info().rss /
           (1024 * 1024 * 1000), " GB.")
 
+def read_galidx_binfile(bin_filename):
+    dtype_ngal = np.dtype(np.int64)
+    offset_galdata = dtype_ngal.itemsize
+    N_gal = np.fromfile(bin_filename, dtype=dtype_ngal,
+                        count=1, offset=0)[0]
+    galindices = np.fromfile(
+        bin_filename, dtype=np.int32, count=3 * N_gal, offset=offset_galdata
+    )
+    galindices = np.reshape(galindices, (N_gal, 3), order="C")
+    return galindices
 
 def transform_bin_to_h5(bin_filename, h5_filename=None):
     """
@@ -125,7 +135,7 @@ def transform_bin_to_h5(bin_filename, h5_filename=None):
     print(np.min(galpos[:, 2]), np.max(galpos[:, 2]))
 
     with h5py.File(h5_filename, "a") as ffile:
-        for key in ["Position", "Velocity", "L_box", "N_gal"]:
+        for key in ["Position", "Velocity", "L_box", "N_gal", "realspace_indices", "RSD_indices"]:
             if key in ffile.keys():
                 print(f"Overwriting {key} in {h5_filename}.")
                 del ffile[key]

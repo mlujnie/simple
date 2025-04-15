@@ -1,5 +1,6 @@
 import unittest
-
+import numpy as np
+import astropy.units as u
 
 class TestStringMethods(unittest.TestCase):
 
@@ -24,6 +25,10 @@ class TestStringMethods(unittest.TestCase):
         self.assertEqual(lim.N_mesh[0], pk3d.N_mesh[0])
         print(pk3d.do_model_shot_noise)
 
+    def test_run_simple(self):
+        from simple.simple import LognormalIntensityMock
+        lim = LognormalIntensityMock("./tests/test_lim_input.yaml")
+        lim.run()
 
 if __name__ == '__main__':
     unittest.main()

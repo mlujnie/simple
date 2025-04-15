@@ -1,6 +1,56 @@
 import numpy as np
 
 ITYPE = int
+
+def get_galaxy_indices_cython(Positions,
+                            N_mesh,
+                            Box_Size):
+
+    """
+    NGP assignment of galaxies with weights (e.g. intensity) to a mesh.
+
+    Parameters:
+    -----------
+    Positions: array-like
+        Array of shape (N_gal, 3) containing the positions of the galaxies.
+    N_mesh: tuple
+        Tuple of three integers (N_x, N_y, N_z) specifying the dimensions of the mesh.
+    Box_Size: array-like
+        Size of the box enclosing the mesh, array of shape (3,).
+
+    Returns:
+    --------
+    mesh: ndarray
+        Array of shape (N_x, N_y, N_z) representing the mesh with assigned weights.
+
+    """
+
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Positions)[0]
+    print("N_gal: ", N_gal)
+
+    cdef long[:,:] indices
+    indices = np.zeros((N_gal, 3), dtype=int) 
+
+    too_highs = 0
+    too_lows = 0
+    for i in range(N_gal):
+        ix = int( (Positions[i,0] // voxel_size[0]) % N_mesh[0] )
+        iy = int( (Positions[i,1] // voxel_size[1]) % N_mesh[1] )
+        iz = int( (Positions[i,2] // voxel_size[2]) % N_mesh[2] )
+        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
+            too_highs += 1
+            continue
+        if (ix < 0) or (iy < 0) or (iz < 0):
+            too_lows += 1
+            continue
+        indices[i][0] = ix
+        indices[i][1] = iy
+        indices[i][2] = iz
+    print("{} too high, {} too low out of {}.".format(too_highs, too_lows, N_gal))
+    return indices
+
 def catalog_to_mesh_cython(Positions,
                             Weights,
                             N_mesh,
@@ -37,18 +87,93 @@ def catalog_to_mesh_cython(Positions,
     too_highs = 0
     too_lows = 0
     for i in range(N_gal):
-        ix = int(np.floor(Positions[i,0] / voxel_size[0]))
-        iy = int(np.floor(Positions[i,1] / voxel_size[1]))
-        iz = int(np.floor(Positions[i,2] / voxel_size[2]))
-        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
-            too_highs += 1
-            continue
-        if (ix < 0) or (iy < 0) or (iz < 0):
-            too_lows += 1
-            continue
+        ix = int(np.floor(Positions[i,0] / voxel_size[0])) % N_mesh[0]
+        iy = int(np.floor(Positions[i,1] / voxel_size[1])) % N_mesh[1]
+        iz = int(np.floor(Positions[i,2] / voxel_size[2])) % N_mesh[2]
         mesh[ix, iy, iz] += Weights[i]
     print("{} too high, {} too low out of {}.".format(too_highs, too_lows, N_gal))
     return mesh
+
+def catalog_to_mesh_cython_use_indices(Indices,
+                            Weights,
+                            N_mesh,
+                            Box_Size):
+
+    """
+    NGP assignment of galaxies with weights (e.g. intensity) to a mesh.
+
+    Parameters:
+    -----------
+    Indices: array-like
+        Array of shape (N_gal, 3) containing the voxel indices of the galaxies.
+    Weights: array-like
+        Array of shape (N_gal,) containing the weights (e.g., intensity) of the galaxies.
+    N_mesh: tuple
+        Tuple of three integers (N_x, N_y, N_z) specifying the dimensions of the mesh.
+    Box_Size: array-like
+        Size of the box enclosing the mesh, array of shape (3,).
+
+    Returns:
+    --------
+    mesh: ndarray
+        Array of shape (N_x, N_y, N_z) representing the mesh with assigned weights.
+
+    """
+
+    cdef double[:,:,:] mesh
+    mesh = np.zeros(N_mesh, dtype=float)
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Indices)[0]
+    print("N_gal: ", N_gal)
+    assert np.shape(Weights)[0] == N_gal
+    too_highs = 0
+    too_lows = 0
+    for i in range(N_gal):
+        ix = Indices[i,0]
+        iy = Indices[i,1]
+        iz = Indices[i,2]
+        mesh[ix, iy, iz] += Weights[i]
+    print("{} too high, {} too low out of {}.".format(too_highs, too_lows, N_gal))
+    return mesh
+
+def get_fratio_by_position(Positions,
+                            Fluxes,
+                            flux_limit_mesh,
+                            N_mesh,
+                            Box_Size):
+    cdef long[:] detected
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Positions)[0]
+    fratios = np.zeros(N_gal, dtype=float)
+    for i in range(N_gal):
+        ix = int(np.floor(Positions[i,0] / voxel_size[0])) % N_mesh[0]
+        iy = int(np.floor(Positions[i,1] / voxel_size[1])) % N_mesh[1]
+        iz = int(np.floor(Positions[i,2] / voxel_size[2])) % N_mesh[2]
+        fratios[i] = Fluxes[i] / flux_limit_mesh[ix, iy, iz]
+        if i % 100000 == 0:
+            print("Selection function: finished {}/{}.".format(i+1, N_gal))
+    return fratios
+
+def get_fratio_by_position_use_indices(Indices,
+                            Fluxes,
+                            flux_limit_mesh,
+                            N_mesh,
+                            Box_Size):
+    cdef long[:] detected
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Indices)[0]
+    fratios = np.zeros(N_gal, dtype=float)
+    for i in range(N_gal):
+        ix = Indices[i,0]
+        iy = Indices[i,1]
+        iz = Indices[i,2]
+        fratios[i] = Fluxes[i] / flux_limit_mesh[ix, iy, iz]
+        if i % 100000 == 0:
+            print("Selection function: finished {}/{}.".format(i+1, N_gal))
+    return fratios
 
 def apply_selection_function_by_position(Positions,
                             Fluxes,
@@ -61,17 +186,32 @@ def apply_selection_function_by_position(Positions,
     N_gal = np.shape(Positions)[0]
     detected = np.zeros(N_gal, dtype=int)
     for i in range(N_gal):
-        ix = int(np.floor(Positions[i,0] / voxel_size[0]))
-        iy = int(np.floor(Positions[i,1] / voxel_size[1]))
-        iz = int(np.floor(Positions[i,2] / voxel_size[2]))
-        ix = min([ix, N_mesh[0]-1])
-        iy = min([iy, N_mesh[1]-1])
-        iz = min([iz, N_mesh[2]-1])
+        ix = int(np.floor(Positions[i,0] / voxel_size[0])) % N_mesh[0]
+        iy = int(np.floor(Positions[i,1] / voxel_size[1])) % N_mesh[1]
+        iz = int(np.floor(Positions[i,2] / voxel_size[2])) % N_mesh[2]
         detected[i] = int(Fluxes[i] > flux_limit_mesh[ix, iy, iz])
         if i % 100000 == 0:
             print("Selection function: finished {}/{}.".format(i+1, N_gal))
     return detected
 
+def apply_selection_function_by_position_use_indices(Indices,
+                            Fluxes,
+                            flux_limit_mesh,
+                            N_mesh,
+                            Box_Size):
+    cdef long[:] detected
+    voxel_size = Box_Size / N_mesh
+    cdef unsigned long long int N_gal 
+    N_gal = np.shape(Indices)[0]
+    detected = np.zeros(N_gal, dtype=int)
+    for i in range(N_gal):
+        ix = Indices[i,0]
+        iy = Indices[i,1]
+        iz = Indices[i,2]
+        detected[i] = int(Fluxes[i] > flux_limit_mesh[ix, iy, iz])
+        if i % 100000 == 0:
+            print("Selection function: finished {}/{}.".format(i+1, N_gal))
+    return detected
 
 def getindep_cython(nx, ny, nz):
     """ From https://github.com/cblakeastro/intensitypower/tree/master."""

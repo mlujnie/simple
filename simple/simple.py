@@ -28,9 +28,10 @@ from simple.tools_python import (
     make_map,
     log_interp1d
 )
-from simple.tools import catalog_to_mesh_cython
+from simple.tools import catalog_to_mesh_cython, catalog_to_mesh_cython_use_indices
 from simple.tools import get_kspec_cython
-from simple.tools import apply_selection_function_by_position
+from simple.tools import apply_selection_function_by_position, apply_selection_function_by_position_use_indices
+from simple.tools import get_fratio_by_position, get_fratio_by_position_use_indices, get_galaxy_indices_cython
 
 
 def aniso_filter(k, v):
@@ -787,6 +788,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     logging.error(
                         "Could not read min_flux as a Table or hdf5 file:\n{}\n{}".format(e1, e2))
 
+        if "selection_function" in input_dict.keys():
+            selection_function_fname = input_dict['selection_function']
+            selfunc_table = Table.read(selection_function_fname, format="csv")
+            detprob_by_fratio = interp1d(selfunc_table['flux_ratio'], selfunc_table['p'], fill_value=(0,1), bounds_error=False)
+            self.selection_function = lambda fratio : np.random.binomial(n=np.ones(fratio.shape, dtype=int), p=detprob_by_fratio(fratio))
+        else:
+            self.selection_function = None
+
         if "limit_ngal" in input_dict.keys():
             self.limit_ngal = input_dict["limit_ngal"]
         else:
@@ -1482,7 +1491,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Getting mean galaxy number density.")
         L_values = np.logspace(np.log10(self.Lmin.to(self.luminosity_unit).value),
                                np.log10(self.Lmax.to(self.luminosity_unit).value),
-                               10000)
+                               100000) # added a 0
         integrated = np.trapz(self.luminosity_function(L_values), L_values)
         n_bar_gal = (integrated * u.Mpc ** (-3)).to(u.Mpc ** (-3))
         logging.info("Done.")
@@ -1513,7 +1522,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Cached like a property self.n_gal_detected."""
         return (self.N_gal_detected / self.box_volume).to(1 / u.Mpc**3)
 
-    def run_lognormal_simulation_cpp(self, output_velocity=0, output_matter=0):
+    def run_lognormal_simulation_cpp(self, output_velocity=0, output_matter=0, output_galidx=1):
         """
         Calculates the power spectrum from input cosmology
         and runs lognormal simulation in lognormal_galaxies.
@@ -1576,6 +1585,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "output_matter": output_matter,
             "output_gal": 1,
             "output_velocity": output_velocity,
+            "output_galidx": output_galidx,
             "calc_mode_pk": 0,
             "out_dir": self.out_dir,
             "halofname_prefix": "",
@@ -2049,6 +2059,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         logging.info("Applying selection function.")
 
+        if self.RSD:
+            position = "RSD_Position"
+            indices = "RSD_indices"
+        else:
+            position = "Position"
+            indices = "realspace_indices"
+
         if self.min_flux is not None:  # if min_flux was given as an input
             if self.limit_ngal is not None:
                 logging.warning(
@@ -2063,15 +2080,34 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
             elif np.size(min_flux) > 1:
                 assert (np.array(np.shape(min_flux)) == self.N_mesh).all()
-                self.cat["detected"] = apply_selection_function_by_position(self.cat['Position'],
+                if self.selection_function is not None:
+                    fratios = get_fratio_by_position_use_indices(self.cat[indices],
+                                                    self.cat['flux'].to(
+                                                        u.erg/u.s/u.cm**2).value,
+                                                    min_flux.to(
+                                                        u.erg/u.s/u.cm**2).value,
+                                                    self.N_mesh,
+                                                    self.box_size.to(self.Mpch))
+                    
+                    logging.info(f"{fratios[fratios > 1e-10] = }")
+                    logging.info(f"{np.nanmin(fratios) = }")
+                    logging.info(f"{np.nanmax(fratios) = }")
+                    logging.info(f"{np.nanmedian(fratios[fratios > 1e-10]) = }")
+                    logging.info(f"{np.nanmean(fratios[fratios > 1e-10]) = }")
+                    self.cat['detected'] = self.selection_function(fratios)
+                    self.cat['detected'] = np.array(
+                        self.cat['detected']).astype(bool)
+                else:
+                    self.cat["detected"] = apply_selection_function_by_position_use_indices(self.cat[indices],
                                                                             self.cat['flux'].to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             min_flux.to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             self.N_mesh,
                                                                             self.box_size.to(self.Mpch))
-                self.cat['detected'] = np.array(
-                    self.cat['detected']).astype(bool)
+                    
+                    self.cat['detected'] = np.array(
+                        self.cat['detected']).astype(bool)
             else:
                 self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
 
@@ -2324,6 +2360,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         """
 
+        if position == "RSD_Position":
+            indices = "RSD_indices"
+        else:
+            indices = "realspace_indices"
+
         galaxy_selection = self.galaxy_selection[tracer]
         # check if the selection function was applied, otherwise apply it.
         if galaxy_selection in ["detected", "undetected"]:
@@ -2427,12 +2468,12 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Signal : {}".format(signal))
         logging.info("Min signal: {}".format(np.min(signal)))
 
-        field = catalog_to_mesh_cython(
-            self.cat[position][mask].to(self.Mpch).value,
-            signal.value.astype(float),
-            self.N_mesh.astype(int),
-            self.box_size.to(self.Mpch).value
-        )
+        field = catalog_to_mesh_cython_use_indices(
+                self.cat[indices][mask],
+                signal.value.astype(float),
+                self.N_mesh.astype(int),
+                self.box_size.to(self.Mpch).value
+            )
         field = make_map(
             field,
             Nmesh=self.N_mesh,
@@ -3203,6 +3244,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             galaxy_selection=self.galaxy_selection["n_gal"],
         )[:, None, None]
 
+    def get_galaxy_indices(self, position, indices):
+        rsd_indices = get_galaxy_indices_cython(
+                self.cat[position].to(self.Mpch).value,
+                self.N_mesh.astype(int),
+                self.box_size.to(self.Mpch).value
+            )
+        self.cat[indices] = np.array(rsd_indices)
+
     def run(self, skip_lognormal=False, save_meshes=False, save_results=True):
         """
         Runs the entire simulation and analysis pipeline.
@@ -3257,10 +3306,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         if self.RSD:
             position = "RSD_Position"
             rsd_ext = "rsd"
+            indices = "RSD_indices"
         else:
             position = "Position"
             rsd_ext = "realspace"
+            indices = "realspace_indices"
 
+        self.get_galaxy_indices(position, indices)
         if self.run_pk['intensity'] or self.run_pk['cross'] or self.run_pk['sky_subtracted_intensity'] or self.run_pk['sky_subtracted_cross']:
             self.paint_intensity_mesh(position=position)
             self.get_intensity_noise_cube()
