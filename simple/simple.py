@@ -1362,6 +1362,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     "luminosity",
                     "detected",
                     "flux",
+                    "realspace_indices",
+                    "RSD_indices",
                 ],
                 galaxy_selection="all",
                 filename=catalog_filename,
@@ -2081,14 +2083,23 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             elif np.size(min_flux) > 1:
                 assert (np.array(np.shape(min_flux)) == self.N_mesh).all()
                 if self.selection_function is not None:
-                    fratios = get_fratio_by_position_use_indices(self.cat[indices],
-                                                    self.cat['flux'].to(
-                                                        u.erg/u.s/u.cm**2).value,
-                                                    min_flux.to(
-                                                        u.erg/u.s/u.cm**2).value,
-                                                    self.N_mesh,
-                                                    self.box_size.to(self.Mpch))
-                    
+                    if indices in self.cat.keys():
+                        fratios = get_fratio_by_position_use_indices(self.cat[indices],
+                                                        self.cat['flux'].to(
+                                                            u.erg/u.s/u.cm**2).value,
+                                                        min_flux.to(
+                                                            u.erg/u.s/u.cm**2).value,
+                                                        self.N_mesh,
+                                                        self.box_size.to(self.Mpch))
+                    else:
+                        fratios = get_fratio_by_position(self.cat[position],
+                                                        self.cat['flux'].to(
+                                                            u.erg/u.s/u.cm**2).value,
+                                                        min_flux.to(
+                                                            u.erg/u.s/u.cm**2).value,
+                                                        self.N_mesh,
+                                                        self.box_size.to(self.Mpch))
+                        
                     logging.info(f"{fratios[fratios > 1e-10] = }")
                     logging.info(f"{np.nanmin(fratios) = }")
                     logging.info(f"{np.nanmax(fratios) = }")
@@ -2098,7 +2109,16 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     self.cat['detected'] = np.array(
                         self.cat['detected']).astype(bool)
                 else:
-                    self.cat["detected"] = apply_selection_function_by_position_use_indices(self.cat[indices],
+                    if indices in self.cat.keys():
+                        self.cat["detected"] = apply_selection_function_by_position_use_indices(self.cat[indices],
+                                                                            self.cat['flux'].to(
+                                                                                u.erg/u.s/u.cm**2).value,
+                                                                            min_flux.to(
+                                                                                u.erg/u.s/u.cm**2).value,
+                                                                            self.N_mesh,
+                                                                            self.box_size.to(self.Mpch))
+                    else:
+                        self.cat["detected"] = apply_selection_function_by_position(self.cat[position],
                                                                             self.cat['flux'].to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             min_flux.to(
@@ -2468,12 +2488,20 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("Signal : {}".format(signal))
         logging.info("Min signal: {}".format(np.min(signal)))
 
-        field = catalog_to_mesh_cython_use_indices(
-                self.cat[indices][mask],
-                signal.value.astype(float),
-                self.N_mesh.astype(int),
-                self.box_size.to(self.Mpch).value
-            )
+        if indices in self.cat.keys():
+            field = catalog_to_mesh_cython_use_indices(
+                    self.cat[indices][mask],
+                    signal.value.astype(float),
+                    self.N_mesh.astype(int),
+                    self.box_size.to(self.Mpch).value
+                )
+        else:
+            field = catalog_to_mesh_cython(
+                    self.cat[position][mask],
+                    signal.value.astype(float),
+                    self.N_mesh.astype(int),
+                    self.box_size.to(self.Mpch).value
+                )
         field = make_map(
             field,
             Nmesh=self.N_mesh,
