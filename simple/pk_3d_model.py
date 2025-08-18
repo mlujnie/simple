@@ -55,10 +55,15 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     """
 
     def __init__(
-        self, input_dict, do_model_shot_noise=None, out_filename=None
+        self, 
+        input_dict, 
+        do_model_shot_noise = None, 
+        out_filename = None,
+        galaxy_mask = None,
+        intensity_mask = None,
     ):
         LognormalIntensityMock.__init__(self, input_dict=input_dict)
-        self.own_init(do_model_shot_noise, out_filename)
+        self.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask)
 
     @classmethod
     def from_file(
@@ -69,6 +74,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         only_params=False,
         only_meshes=["noise_mesh", "obs_mask"],
         do_model_shot_noise=None,
+        galaxy_mask = None,
+        intensity_mask = None,
     ):
         """
         Method to initiate a Power_Spectrum_Model object from a file
@@ -102,10 +109,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                                      only_params=only_params,
                                      only_meshes=only_meshes,
                                      )
-        instance.own_init(do_model_shot_noise, out_filename)
+        instance.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask)
         return instance
 
-    def own_init(self, do_model_shot_noise, out_filename):
+    def own_init(self, do_model_shot_noise, out_filename, galaxy_mask, intensity_mask):
         """
         Step in initializing the Power_Spectrum_Model instance.
 
@@ -121,6 +128,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Initializing Power_Spectrum_Model instance.")
         self.do_model_shot_noise = do_model_shot_noise
         self.out_filename = out_filename
+
+        self.galaxy_mask = galaxy_mask
+        self.intensity_mask = intensity_mask
 
         if isinstance(self.input_pk_filename, str):
             plin_tab = Table.read(self.input_pk_filename, format="ascii")
@@ -149,6 +159,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         if self.obs_mask is None:
             self.obs_mask = np.ones(self.N_mesh, dtype=int)
             logging.info("Assigned ones to mask.")
+        if self.galaxy_mask is None:
+            self.galaxy_mask = np.ones(self.N_mesh, dtype=int)
+            logging.info("Assigned ones to galaxy_mask.")
+        if self.intensity_mask is None:
+            self.intensity_mask = np.ones(self.N_mesh, dtype=int)
+            logging.info("Assigned ones to intensity_mask.")
 
         self.s_par = self.sigma_par().to(self.Mpch).value
         self.s_perp = self.sigma_perp().to(self.Mpch).value
@@ -430,6 +446,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         ) = self.bin_scipy(model.real, return_nmodes=True)
 
         if save:
+
+            tracer_units = {
+                "intensity" : str(self.mean_intensity**2 * self.Mpch**3),
+                "cross" : str(self.mean_intensity * self.Mpch**3),
+                "n_gal" : str(self.Mpch**3)
+            }
             with h5py.File(self.out_filename, "a") as ff:
                 if tracer in ff.keys():
                     del ff[tracer]
@@ -437,11 +459,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                         f'Overwriting {tracer} in file {self.out_filename}.')
                 grp = ff.create_group(tracer)
                 ff[f"{tracer}/monopole"] = monopole
+                ff[f"{tracer}/monopole"].attrs['unit'] = tracer_units[tracer]
+
                 ff[f"{tracer}/quadrupole"] = quadrupole
+                ff[f"{tracer}/quadrupole"].attrs['unit'] = tracer_units[tracer]
+
                 ff[f"{tracer}/k_bins"] = mean_k
+                ff[f"{tracer}/k_bins"].attrs['unit'] = 1/self.Mpch
+
                 ff[f"{tracer}/P_shot"] = P_shot_smoothed.to(self.Mpch**3).value
+                ff[f"{tracer}/P_shot"].attrs['unit'] = tracer_units[tracer]
+
                 ff[f"{tracer}/S_bar"] = (S_bar *
                                          box_volume).to(self.Mpch**3).value
+                ff[f"{tracer}/S_bar"].attrs['unit'] = tracer_units[tracer]
+
                 ff[f"{tracer}/n_modes"] = n_modes
                 logging.info("Done")
             if return_3d:
@@ -563,7 +595,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             # intensity_rfield = intensity_rfield.r2c().apply(
             #    self.compensation[0][1], kind=self.compensation[0][2]
             # ).c2r()
-            delta_k_im = (intensity_rfield * self.obs_mask).r2c()
+            delta_k_im = (intensity_rfield * self.obs_mask * self.intensity_mask).r2c()
             delta_k_sq = delta_k_im * np.conjugate(delta_k_im)
             intensity_shot_noise_delta_k_sqs.append(delta_k_sq)
 
@@ -579,7 +611,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             # galaxy_rfield = galaxy_rfield.r2c().apply(
             #   self.compensation[0][1], kind=self.compensation[0][2]
             # ).c2r()
-            delta_k_ngal = (galaxy_rfield * self.obs_mask).r2c()
+            delta_k_ngal = (galaxy_rfield * self.obs_mask * self.galaxy_mask).r2c()
             delta_k_sq = delta_k_ngal * np.conjugate(delta_k_ngal)
             n_gal_shot_noise_delta_k_sqs.append(delta_k_sq)
 
@@ -655,7 +687,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                     4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr)  * (1 + redshift)**2
                 )
                 int_sec_mom = rho_L_second_moment * factor**2 * H_sq_inv
-                int_sec_mom = int_sec_mom * np.mean(self.obs_mask[i]**2)
+                int_sec_mom = int_sec_mom * np.mean(self.obs_mask[i]**2 * self.intensity_mask[i]**2)
                 int_sec_mom_unit = int_sec_mom.unit
                 intensity_second_moment.append(int_sec_mom.value)
             intensity_second_moment = (
@@ -680,7 +712,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 1 /
                 ( self.astropy_cosmo.H(self.redshift_mesh_axis) ** 2
                     * (1 + self.redshift_mesh_axis)**4 )
-                * np.mean(self.obs_mask**2, axis=(1, 2)),
+                * np.mean(self.obs_mask**2 * self.intensity_mask**2, axis=(1, 2)),
             )
             rho_L_second_moment = integral * self.luminosity_unit**2 / u.Mpc**3
             factor = const.c / \
@@ -727,7 +759,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 self.redshift_mesh_axis,
                 tracer="n_gal",
                 galaxy_selection=galaxy_selection,
-            ) * np.mean(self.obs_mask**2, axis=(1, 2))
+            ) * np.mean(self.obs_mask**2 * self.intensity_mask * self.galaxy_mask, axis=(1, 2))
         ).to(self.Mpch**3)
 
         return P_shot
@@ -798,7 +830,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                               self.s_perp_sky))
             )
         mask_window_function = (
-            self.obs_mask
+            self.obs_mask * self.intensity_mask
             * self.mean_intensity_per_redshift_mesh.to(self.mean_intensity)
             * self.weight_mesh_im
         ).to(1)
@@ -809,7 +841,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         else:
             P_shot_smoothed = self.get_intensity_shot_noise()
         S_bar_im = self.get_S_bar(
-            self.weight_mesh_im * self.obs_mask, sigma_noise_im)
+            self.weight_mesh_im * self.intensity_mask * self.obs_mask, sigma_noise_im)
         logging.info("\nS_bar intensity: {}\n".format(
             (S_bar_im * self.box_volume).to(self.Mpch**3)))
         observed_volume = self.get_observed_volume()
@@ -857,7 +889,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.mean_ngal_per_redshift_mesh / self.voxel_volume
         )
         mean_ngal_per_redshift_mesh = self.mean_ngal_per_redshift_mesh  # lim.n_bar_gal
-        mask_window_function = self.obs_mask
+        mask_window_function = self.obs_mask * self.galaxy_mask
         # self.obs_mask * mean_ngal_per_redshift_mesh * self.weight_mesh_ngal
         damping_function = 1.0
         if self.do_model_shot_noise:
@@ -869,7 +901,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             #    self.weight_mesh_ngal * self.obs_mask, sigma_noise_ngal)
             # P_shot_smoothed = S_bar_ngal * self.box_volume
             P_shot_smoothed = np.mean(
-                self.obs_mask**2 / self.mean_ngal_per_redshift_mesh).to(self.Mpch**3)
+                (self.obs_mask * self.galaxy_mask)**2 / self.mean_ngal_per_redshift_mesh).to(self.Mpch**3)
             logging.info(
                 "\n P_shot_ngal: {} \n".format(P_shot_smoothed))
         S_bar_notsmoothed = 0.0
@@ -912,10 +944,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Got mean ngal per redshift mesh.")
 
         mask_window_function_1 = (
-            self.obs_mask * mean_per_redshift_mesh_ngal * self.weight_mesh_ngal
+            self.obs_mask * self.galaxy_mask * mean_per_redshift_mesh_ngal * self.weight_mesh_ngal
         )
         mask_window_function_2 = (
-            self.obs_mask * mean_per_redshift_mesh_im * self.weight_mesh_im
+            self.obs_mask * self.intensity_mask * mean_per_redshift_mesh_im * self.weight_mesh_im
         )
 
         if self.do_model_shot_noise:

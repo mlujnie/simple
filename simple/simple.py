@@ -730,7 +730,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         # initiate general box parameters
         self.redshift = input_dict["redshift"]
-        self.bias = input_dict["bias"]
+        self.bias = np.float(input_dict["bias"])
         self.box_size = input_dict["box_size"]
         if isinstance(self.box_size, str):
             self.box_size = eval(self.box_size)
@@ -3245,12 +3245,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )[:, None, None]
 
     def get_galaxy_indices(self, position, indices):
+        logging.info(f"Getting galaxy indices: {position} {indices}.")
         rsd_indices = get_galaxy_indices_cython(
                 self.cat[position].to(self.Mpch).value,
                 self.N_mesh.astype(int),
                 self.box_size.to(self.Mpch).value
             )
         self.cat[indices] = np.array(rsd_indices)
+        logging.info("Done")
+        return 
 
     def run(self, skip_lognormal=False, save_meshes=False, save_results=True):
         """
@@ -3301,18 +3304,19 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.assign_redshift_along_axis()
             self.assign_luminosity()
             self.assign_flux()
+
+            if self.RSD:
+                position = "RSD_Position"
+                rsd_ext = "rsd"
+                indices = "RSD_indices"
+            else:
+                position = "Position"
+                rsd_ext = "realspace"
+                indices = "realspace_indices"
+
+            self.get_galaxy_indices(position, indices)
             self.apply_selection_function()
-
-        if self.RSD:
-            position = "RSD_Position"
-            rsd_ext = "rsd"
-            indices = "RSD_indices"
-        else:
-            position = "Position"
-            rsd_ext = "realspace"
-            indices = "realspace_indices"
-
-        self.get_galaxy_indices(position, indices)
+        
         if self.run_pk['intensity'] or self.run_pk['cross'] or self.run_pk['sky_subtracted_intensity'] or self.run_pk['sky_subtracted_cross']:
             self.paint_intensity_mesh(position=position)
             self.get_intensity_noise_cube()
