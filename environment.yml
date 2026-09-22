@@ -1,4 +1,4 @@
-name: simpleenv
+name: simpleenv_20260921
 channels:
   - bccp
   - defaults
@@ -6,7 +6,7 @@ dependencies:
   - python=3.8
   - numpy
   - scipy
-  - astropy
+  - astropy>=5.2.1
   - h5py
   - dask
   - pmesh

@@ -730,7 +730,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         # initiate general box parameters
         self.redshift = input_dict["redshift"]
-        self.bias = np.float(input_dict["bias"])
+        self.bias = float(input_dict["bias"])
         self.box_size = input_dict["box_size"]
         if isinstance(self.box_size, str):
             self.box_size = eval(self.box_size)
@@ -1440,6 +1440,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         self.N_mesh = np.array(new_N_mesh)
         self.voxel_size = (self.box_size / self.N_mesh).to(self.Mpch)
+                # The galaxy voxel indices refer to the old mesh and are invalid now.
+        cat = getattr(self, "cat", None)
+        if cat is not None:
+            for position, indices in (("Position", "realspace_indices"),
+                                      ("RSD_Position", "RSD_indices")):
+                if indices in cat:
+                    del cat[indices]
+                    if position in cat:
+                        self.get_galaxy_indices(position, indices)
         try:
             del self.redshift_mesh_axis
         except:
@@ -1467,7 +1476,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
     @functools.cached_property
     def n_bar_gal(self):
-        """
+        r"""
         Calculates the mean galaxy number density by
         integrating over the luminosity function from Lmin to Lmax.
         It does not take the selection function into account.
@@ -2497,7 +2506,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 )
         else:
             field = catalog_to_mesh_cython(
-                    self.cat[position][mask],
+                    self.cat[position][mask].to(self.Mpch).value,
                     signal.value.astype(float),
                     self.N_mesh.astype(int),
                     self.box_size.to(self.Mpch).value
@@ -3085,7 +3094,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def mean_intensity_per_redshift(
         self, redshifts, galaxy_selection="all", tracer="intensity"
     ):
-        """
+        r"""
         Calculates the mean intensity or the mean galaxy number density that we would expect
         at a given redshift of a given galaxy population (either all or detected/undetected galaxies).
         We use the integrals
@@ -3322,6 +3331,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         """
 
+        if self.RSD:
+            position = "RSD_Position"
+            rsd_ext = "rsd"
+            indices = "RSD_indices"
+        else:
+            position = "Position"
+            rsd_ext = "realspace"
+            indices = "realspace_indices"
+
         if not skip_lognormal:
             self.run_lognormal_simulation_cpp()
             self.load_lognormal_catalog_cpp(
@@ -3332,16 +3350,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.assign_redshift_along_axis()
             self.assign_luminosity()
             self.assign_flux()
-
-            if self.RSD:
-                position = "RSD_Position"
-                rsd_ext = "rsd"
-                indices = "RSD_indices"
-            else:
-                position = "Position"
-                rsd_ext = "realspace"
-                indices = "realspace_indices"
-
             self.get_galaxy_indices(position, indices)
             self.apply_selection_function()
         

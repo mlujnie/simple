@@ -19,7 +19,7 @@ from simple.tools import get_kspec_cython
 
 
 def kaiser_pkmu(Plin, k, mu, bias, f_growth):
-    """
+    r"""
     Returns the Kaiser linear P(k,mu) in redshift space
 
     .. math::
