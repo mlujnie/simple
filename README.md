@@ -15,7 +15,7 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
 **Warning:** Equation (4) in the paper is missing a factor of $(1+z)^{-2}$. We corrected this in the code version 1.0.0.
 
 ## Installation
-1. Make sure you have a python environment with all the required packages (specified in the `environments.yaml` file.)
+1. Make sure you have a python environment with all the required packages: `conda create --file environment.yml` or `conda env create --file environment.yml`.
 2. install intensity-mapping branch of lognormal_galaxies code from [https://bitbucket.org/komatsu5147/lognormal_galaxies/src/intensity-mapping/](https://bitbucket.org/komatsu5147/lognormal_galaxies/src/intensity-mapping/):
       `git clone -b intensity-mapping https://bitbucket.org/komatsu5147/lognormal_galaxies/`
       and follow installation instructions.
