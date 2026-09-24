@@ -10,4 +10,4 @@ class Config():
     """
     
     def __init__(self):
-        self.lognormal_galaxies_path = '/u/majaln/intensity-mapping/code/mock/lognormal_galaxies/'
+        self.lognormal_galaxies_path = '/Users/maja/Documents/projects/playground/simple_test_2026_09_21/lognormal_galaxies/'
