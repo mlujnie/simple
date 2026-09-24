@@ -1,0 +1,8 @@
+[build-system]
+# setup.py imports Cython at the top and builds simple/tools.pyx, so Cython has
+# to be present before the build starts. Declaring it here lets `pip install .`
+# work in a clean environment instead of failing with ImportError.
+# Cython is pinned below 3 because the extension was written against 0.29 and
+# Cython 3 changed several defaults.
+requires = ["setuptools>=64", "wheel", "Cython<3"]
+build-backend = "setuptools.build_meta"

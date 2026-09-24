@@ -1,14 +1,39 @@
-name: simpleenv_20260921
+# Conda environment for SIMPLE.
+#
+#   conda env create -f environment.yml
+#   conda activate simpleenv
+#   pip install -e .
+#
+# On Apple Silicon Macs with an arm64 conda, create the env as Intel (osx-64),
+# since pmesh and pfft-python come from the bccp channel:
+#   CONDA_SUBDIR=osx-64 conda env create -f environment.yml
+#   conda activate simpleenv && conda config --env --set subdir osx-64
+name: simpleenv
 channels:
   - bccp
-  - defaults
+  - conda-forge
+  - nodefaults
 dependencies:
   - python=3.8
   - numpy
   - scipy
+  # 5.2.1 fixed z_at_value against newer scipy, which otherwise raises
+  # "Use of `bounds` is incompatible with 'method=Brent'".
   - astropy>=5.2.1
   - h5py
   - dask
+  - pyyaml
+  - psutil
+  # Build dependency for simple/tools.pyx. The extension was written against
+  # Cython 0.29; Cython 3 changed several defaults, so stay on 0.29 for now.
+  - cython<3
+  # Particle-mesh / parallel FFT stack.
   - pmesh
-  - cython
-  - mpich=*=h*
+  - mpi4py>=3,<4
+  # pfft-python is linked against MPICH (libmpi.12). The "=h*" build string
+  # excludes the "external_*" builds, which are empty placeholders that expect
+  # a system-wide MPI and lead to "Library not loaded" errors or segfaults.
+  # The channel prefix makes this work under strict channel priority too.
+  - conda-forge::mpich=*=h*
+  # For running the test suite.
+  - pytest
