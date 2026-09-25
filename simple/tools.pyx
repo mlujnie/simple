@@ -2,6 +2,27 @@ import numpy as np
 
 ITYPE = int
 
+
+def _as_plain_array(array, name, dtype=float):
+    """
+    Return `array` as a plain numpy array of `dtype`.
+
+    The routines in this module work with bare numbers and assume that every
+    length is expressed in the same unit. An astropy Quantity slipping through
+    either crashes deep inside a loop with a confusing message about scalar
+    conversion, or is silently misread, since np.asarray() drops units without
+    converting them. Rejecting Quantities here turns both cases into one clear
+    error at the call site.
+    """
+    if getattr(array, "unit", None) is not None:
+        raise TypeError(
+            "{0} must not carry units, but it is a Quantity in '{1}'. "
+            "Strip the units at the call site, making sure all lengths use "
+            "the same one, e.g. {0}.to(box_size.unit).value.".format(
+                name, array.unit)
+        )
+    return np.asarray(array, dtype=dtype)
+
 def get_galaxy_indices_cython(Positions,
                             N_mesh,
                             Box_Size):
@@ -25,6 +46,9 @@ def get_galaxy_indices_cython(Positions,
 
     """
 
+    Positions = _as_plain_array(Positions, "Positions")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
     N_gal = np.shape(Positions)[0]
@@ -36,19 +60,22 @@ def get_galaxy_indices_cython(Positions,
     too_highs = 0
     too_lows = 0
     for i in range(N_gal):
-        ix = int( (Positions[i,0] // voxel_size[0]) % N_mesh[0] )
-        iy = int( (Positions[i,1] // voxel_size[1]) % N_mesh[1] )
-        iz = int( (Positions[i,2] // voxel_size[2]) % N_mesh[2] )
-        if ((ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1)):
+        # Same expression as catalog_to_mesh_cython, so that both routines
+        # always agree on which voxel a galaxy belongs to.
+        ix = int(np.floor(Positions[i,0] / voxel_size[0]))
+        iy = int(np.floor(Positions[i,1] / voxel_size[1]))
+        iz = int(np.floor(Positions[i,2] / voxel_size[2]))
+        if (ix > N_mesh[0] - 1) or (iy > N_mesh[1] - 1) or (iz > N_mesh[2] - 1):
             too_highs += 1
-            continue
-        if (ix < 0) or (iy < 0) or (iz < 0):
+        elif (ix < 0) or (iy < 0) or (iz < 0):
             too_lows += 1
-            continue
-        indices[i][0] = ix
-        indices[i][1] = iy
-        indices[i][2] = iz
-    print("{} too high, {} too low out of {}.".format(too_highs, too_lows, N_gal))
+        # Galaxies outside the box are wrapped around, since the box is
+        # periodic. The counters above only report how many were wrapped.
+        indices[i][0] = ix % N_mesh[0]
+        indices[i][1] = iy % N_mesh[1]
+        indices[i][2] = iz % N_mesh[2]
+    print("{} too high, {} too low out of {} (wrapped around the periodic box).".format(
+        too_highs, too_lows, N_gal))
     return indices
 
 def catalog_to_mesh_cython(Positions,
@@ -76,6 +103,10 @@ def catalog_to_mesh_cython(Positions,
         Array of shape (N_x, N_y, N_z) representing the mesh with assigned weights.
 
     """
+
+    Positions = _as_plain_array(Positions, "Positions")
+    Weights = _as_plain_array(Weights, "Weights")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
 
     cdef double[:,:,:] mesh
     mesh = np.zeros(N_mesh, dtype=float)
@@ -120,6 +151,10 @@ def catalog_to_mesh_cython_use_indices(Indices,
 
     """
 
+    Indices = _as_plain_array(Indices, "Indices", dtype=ITYPE)
+    Weights = _as_plain_array(Weights, "Weights")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     cdef double[:,:,:] mesh
     mesh = np.zeros(N_mesh, dtype=float)
     voxel_size = Box_Size / N_mesh
@@ -142,6 +177,11 @@ def get_fratio_by_position(Positions,
                             flux_limit_mesh,
                             N_mesh,
                             Box_Size):
+    Positions = _as_plain_array(Positions, "Positions")
+    Fluxes = _as_plain_array(Fluxes, "Fluxes")
+    flux_limit_mesh = _as_plain_array(flux_limit_mesh, "flux_limit_mesh")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     cdef long[:] detected
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
@@ -161,6 +201,11 @@ def get_fratio_by_position_use_indices(Indices,
                             flux_limit_mesh,
                             N_mesh,
                             Box_Size):
+    Indices = _as_plain_array(Indices, "Indices", dtype=ITYPE)
+    Fluxes = _as_plain_array(Fluxes, "Fluxes")
+    flux_limit_mesh = _as_plain_array(flux_limit_mesh, "flux_limit_mesh")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     cdef long[:] detected
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
@@ -180,6 +225,11 @@ def apply_selection_function_by_position(Positions,
                             flux_limit_mesh,
                             N_mesh,
                             Box_Size):
+    Positions = _as_plain_array(Positions, "Positions")
+    Fluxes = _as_plain_array(Fluxes, "Fluxes")
+    flux_limit_mesh = _as_plain_array(flux_limit_mesh, "flux_limit_mesh")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     cdef long[:] detected
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 
@@ -199,6 +249,11 @@ def apply_selection_function_by_position_use_indices(Indices,
                             flux_limit_mesh,
                             N_mesh,
                             Box_Size):
+    Indices = _as_plain_array(Indices, "Indices", dtype=ITYPE)
+    Fluxes = _as_plain_array(Fluxes, "Fluxes")
+    flux_limit_mesh = _as_plain_array(flux_limit_mesh, "flux_limit_mesh")
+    Box_Size = _as_plain_array(Box_Size, "Box_Size")
+
     cdef long[:] detected
     voxel_size = Box_Size / N_mesh
     cdef unsigned long long int N_gal 

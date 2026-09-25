@@ -1440,7 +1440,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         self.N_mesh = np.array(new_N_mesh)
         self.voxel_size = (self.box_size / self.N_mesh).to(self.Mpch)
-                # The galaxy voxel indices refer to the old mesh and are invalid now.
+
+        # The galaxy voxel indices refer to the old mesh and are invalid now.
         cat = getattr(self, "cat", None)
         if cat is not None:
             for position, indices in (("Position", "realspace_indices"),
@@ -1449,6 +1450,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     del cat[indices]
                     if position in cat:
                         self.get_galaxy_indices(position, indices)
+
         try:
             del self.redshift_mesh_axis
         except:
@@ -2099,15 +2101,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                                                         min_flux.to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         self.N_mesh,
-                                                        self.box_size.to(self.Mpch))
+                                                        self.box_size.to(self.Mpch).value)
                     else:
-                        fratios = get_fratio_by_position(self.cat[position],
+                        fratios = get_fratio_by_position(self.cat[position].to(self.Mpch).value,
                                                         self.cat['flux'].to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         min_flux.to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         self.N_mesh,
-                                                        self.box_size.to(self.Mpch))
+                                                        self.box_size.to(self.Mpch).value)
                         
                     logging.info(f"{fratios[fratios > 1e-10] = }")
                     logging.info(f"{np.nanmin(fratios) = }")
@@ -2125,15 +2127,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                                                                             min_flux.to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             self.N_mesh,
-                                                                            self.box_size.to(self.Mpch))
+                                                                            self.box_size.to(self.Mpch).value)
                     else:
-                        self.cat["detected"] = apply_selection_function_by_position(self.cat[position],
+                        self.cat["detected"] = apply_selection_function_by_position(self.cat[position].to(self.Mpch).value,
                                                                             self.cat['flux'].to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             min_flux.to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             self.N_mesh,
-                                                                            self.box_size.to(self.Mpch))
+                                                                            self.box_size.to(self.Mpch).value)
                     
                     self.cat['detected'] = np.array(
                         self.cat['detected']).astype(bool)
@@ -2433,7 +2435,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )
 
         Vcell_true = (
-            np.product(self.box_size.to(u.Mpc).value /
+            np.prod(self.box_size.to(u.Mpc).value /
                        self.N_mesh) * (u.Mpc**3)
         ).to(u.Mpc**3)
 
@@ -2488,7 +2490,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             signal = (np.ones(self.cat[position][mask].shape[0]) / Vcell_true).to(
                 u.Mpc ** (-3)
             )  # n_gal
-            # n_bar_gal_masked = self.cat['luminosity'][mask].size / np.product(self.box_size.to(u.Mpc).value) * u.Mpc**(-3)
+            # n_bar_gal_masked = self.cat['luminosity'][mask].size / np.prod(self.box_size.to(u.Mpc).value) * u.Mpc**(-3)
             # signal = ((signal / n_bar_gal_masked)).to(1) # divide by n_bar to get 1+delta_gal
         else:
             raise ValueError(
