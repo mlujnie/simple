@@ -937,8 +937,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     self.obs_mask = ff["mask"][:]
             else:
                 self.obs_mask = obs_mask
-            print((self.obs_mask.shape, self.N_mesh))
-            assert (np.array(self.obs_mask.shape) == self.N_mesh).all()
+
+            if self.obs_mask is not None:
+                print((self.obs_mask.shape, self.N_mesh))
+                assert (np.array(self.obs_mask.shape) == self.N_mesh).all()
         else:
             self.obs_mask = None
 
@@ -1514,8 +1516,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def n_bar_gal_mesh(self):
         """ Calculates the mean galaxy number density from the mesh self.n_gal_mesh.
             Cached like a property self.n_bar_gal_mesh."""
-        mean_ngal = np.mean(self.n_gal_mesh)
-        return mean_ngal.to(u.Mpc ** (-3))
+        if self.n_gal_mesh is None:
+            return None
+        else:
+            mean_ngal = np.mean(self.n_gal_mesh)
+            return mean_ngal.to(u.Mpc ** (-3))
 
     @functools.cached_property
     def N_gal(self):
