@@ -21,7 +21,7 @@ The latest documentation can be found here: https://simple-intensity-mapping-sim
       and follow installation instructions.
 3. clone this repo 
     `git clone https://github.com/mlujnie/simple`.
-4. modify the `simple/config.py` file: change the path to the path of your lognormal_galaxies installation.
+4. Run `cp simple/config_example.py simple/config.py` and change the path to the path of your lognormal_galaxies installation in the `simple/config.py` file.
 5. type `pip install .` in the root directory of this repo.
 
 ## Dependencies

@@ -1,0 +1,8 @@
+simple/config.py
+simple/*.so
+tests/tmp/
+build/
+simple.egg-info/
+simple/__pycache__/
+simple/tools.c
+tests/__pycache__/
