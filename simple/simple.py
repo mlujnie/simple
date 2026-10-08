@@ -1985,7 +1985,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         logging.info("log10_L_choice: length {}".format(L_choice.shape))
 
         self.cat["luminosity"] = L_choice * self.luminosity_unit
-        self.Lmax = self.cat["luminosity"].max()
         logging.info("Done.")
         return
 
