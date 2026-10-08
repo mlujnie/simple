@@ -271,7 +271,7 @@ class BasicBoxCalculator:
 
         logging.info("Getting k_spec...")
         nx, ny, nz = self.N_mesh
-        lx, ly, lz = self.box_size.to(self.Mpch).value
+        lx, ly, lz = self.box_size.to_value(self.Mpch)
 
         kspec, muspec, indep, kx, ky, kz, k_par, k_perp = get_kspec_cython(
             nx, ny, nz, lx, ly, lz, dohalf, doindep
@@ -314,7 +314,7 @@ class BasicBoxCalculator:
             * voxel_length
             + voxel_length / 2.0
         )
-        position = position.to(self.Mpch).value
+        position = position.to_value(self.Mpch)
         x = np.array(
             [[position[0] for i in range(N_mesh[1])] for j in range(N_mesh[2])]
         )
@@ -1397,9 +1397,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         except:
             unit = None
         map = make_map(mesh.value, Nmesh=self.N_mesh,
-                       BoxSize=self.box_size.to(self.Mpch).value)
+                       BoxSize=self.box_size.to_value(self.Mpch))
         pm_down = pmesh.pm.ParticleMesh(new_N_mesh,
-                                        BoxSize=self.box_size.to(self.Mpch).value, dtype='float32', resampler="nearest")
+                                        BoxSize=self.box_size.to_value(self.Mpch), dtype='float32', resampler="nearest")
         map = pm_down.downsample(map, keep_mean=True)
         if unit is not None:
             map = (np.array(map) * unit).to(unit)
@@ -1583,9 +1583,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "bias_cpkG": 1.35,
             "Nrealization": 1,
             "Ngalaxies": self.N_gal,
-            "Lx": self.box_size[0].to(self.Mpch).value,
-            "Ly": self.box_size[1].to(self.Mpch).value,
-            "Lz": self.box_size[2].to(self.Mpch).value,
+            "Lx": self.box_size[0].to_value(self.Mpch),
+            "Ly": self.box_size[1].to_value(self.Mpch),
+            "Lz": self.box_size[2].to_value(self.Mpch),
             "rmax": 10000.0,
             "seed": self.seed_lognormal,
             "Pnmax": int(np.max(self.N_mesh)),
@@ -2106,15 +2106,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                                                         min_flux.to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         self.N_mesh,
-                                                        self.box_size.to(self.Mpch).value)
+                                                        self.box_size.to_value(self.Mpch))
                     else:
-                        fratios = get_fratio_by_position(self.cat[position].to(self.Mpch).value,
+                        fratios = get_fratio_by_position(self.cat[position].to_value(self.Mpch),
                                                         self.cat['flux'].to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         min_flux.to(
                                                             u.erg/u.s/u.cm**2).value,
                                                         self.N_mesh,
-                                                        self.box_size.to(self.Mpch).value)
+                                                        self.box_size.to_value(self.Mpch))
                         
                     logging.info(f"{fratios[fratios > 1e-10] = }")
                     logging.info(f"{np.nanmin(fratios) = }")
@@ -2132,15 +2132,15 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                                                                             min_flux.to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             self.N_mesh,
-                                                                            self.box_size.to(self.Mpch).value)
+                                                                            self.box_size.to_value(self.Mpch))
                     else:
-                        self.cat["detected"] = apply_selection_function_by_position(self.cat[position].to(self.Mpch).value,
+                        self.cat["detected"] = apply_selection_function_by_position(self.cat[position].to_value(self.Mpch),
                                                                             self.cat['flux'].to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             min_flux.to(
                                                                                 u.erg/u.s/u.cm**2).value,
                                                                             self.N_mesh,
-                                                                            self.box_size.to(self.Mpch).value)
+                                                                            self.box_size.to_value(self.Mpch))
                     
                     self.cat['detected'] = np.array(
                         self.cat['detected']).astype(bool)
@@ -2506,22 +2506,24 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         if indices in self.cat.keys():
             field = catalog_to_mesh_cython_use_indices(
-                    self.cat[indices][mask],
+                    self.cat[indices],
                     signal.value.astype(float),
                     self.N_mesh.astype(int),
-                    self.box_size.to(self.Mpch).value
+                    self.box_size.to_value(self.Mpch),
+                    mask=mask
                 )
         else:
             field = catalog_to_mesh_cython(
-                    self.cat[position][mask].to(self.Mpch).value,
+                    self.cat[position].to_value(self.Mpch),
                     signal.value.astype(float),
                     self.N_mesh.astype(int),
-                    self.box_size.to(self.Mpch).value
+                    self.box_size.to_value(self.Mpch),
+                    mask=mask
                 )
         field = make_map(
             field,
             Nmesh=self.N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
+            BoxSize=self.box_size.to_value(self.Mpch),
         )
 
         logging.info(
@@ -2542,8 +2544,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             global LOS
             LOS = self.LOS
             # compute scales for the anisotropic filter (in Ztrue -> zmid)
-            sigma_par = self.sigma_par().to(self.Mpch).value
-            sigma_perp = self.sigma_perp().to(self.Mpch).value
+            sigma_par = self.sigma_par().to_value(self.Mpch)
+            sigma_perp = self.sigma_perp().to_value(self.Mpch)
             logging.info('Smoothing LOS: {}'.format(sigma_par))
             logging.info('Smoothing angular: {}'.format(sigma_perp))
             sigma = sigma_par * self.LOS + sigma_perp * (self.LOS == 0).astype(
@@ -2551,7 +2553,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             )  # orders the sigmas in the same axes as the data.
 
             # raise a warning if the smoothing length is smaller than the voxel length.
-            if (sigma < self.box_size.to(self.Mpch).value / self.N_mesh).any():
+            if (sigma < self.box_size.to_value(self.Mpch) / self.N_mesh).any():
                 logging.warning(
                     "The smoothing length along or perpendicular to the LOS is smaller than the voxel size! You should consider using a larger smoothing length."
                 )
@@ -2799,7 +2801,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         intensity_realfield = make_map(
             intensity_map,
             Nmesh=self.N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
+            BoxSize=self.box_size.to_value(self.Mpch),
         )
         self.sky_intensity_mesh = (
             intensity_realfield.r2c().apply(angular_tophat_filter, kind="wavenumber")
@@ -2868,7 +2870,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         intensity_map_to_use = make_map(
             (intensity_map / weights_im).to(1),
             Nmesh=self.N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
+            BoxSize=self.box_size.to_value(self.Mpch),
         )
 
         if sky_subtraction:
@@ -2928,7 +2930,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
                                      Nmesh=self.N_mesh,
-                                     BoxSize=self.box_size.to(self.Mpch).value,
+                                     BoxSize=self.box_size.to_value(self.Mpch),
                                      )
 
         if self.obs_mask is not None:
@@ -3291,9 +3293,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def get_galaxy_indices(self, position, indices):
         logging.info(f"Getting galaxy indices: {position} {indices}.")
         rsd_indices = get_galaxy_indices_cython(
-                self.cat[position].to(self.Mpch).value,
+                self.cat[position].to_value(self.Mpch),
                 self.N_mesh.astype(int),
-                self.box_size.to(self.Mpch).value
+                self.box_size.to_value(self.Mpch)
             )
         self.cat[indices] = np.array(rsd_indices)
         logging.info("Done")
