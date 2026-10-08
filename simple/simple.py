@@ -807,14 +807,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.limit_ngal, format="ascii.ecsv")
             interp_limit_ngal = interp1d(
                 limit_ngal_table["redshift"],
-                limit_ngal_table["min_flux"],
-                fill_value=(limit_ngal_table['min_flux']
-                            [0], limit_ngal_table['min_flux'][-1]),
+                limit_ngal_table["limit_ngal"],
+                fill_value=(limit_ngal_table['limit_ngal']
+                            [0], limit_ngal_table['limit_ngal'][-1]),
                 bounds_error=False
             )
             self.limit_ngal = (
                 lambda z: interp_limit_ngal(
-                    z) * limit_ngal_table["min_flux"].unit
+                    z) * limit_ngal_table["limit_ngal"].unit
             )
         self.galaxy_selection = input_dict["galaxy_selection"]
 
@@ -2149,8 +2149,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         elif self.limit_ngal is not None:  # if instead limit_ngal was given as an input
             min_L_for_interpolation = self.Lmin.to(self.luminosity_unit).value
-            max_L_for_interpolation = np.log10(
-                self.Lmax.to(self.luminosity_unit).value)
+            max_L_for_interpolation = self.Lmax.to(self.luminosity_unit).value
             if not np.isfinite(max_L_for_interpolation):
                 max_L_for_interpolation = (
                     (1000 * self.Lmin).to(self.luminosity_unit).value
@@ -2192,10 +2191,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                         .to(flux_unit)
                         .value
                     )
-                self.min_flux = interp1d(redshifts, min_flux_det)
+                interp_min_flux_det = interp1d(redshifts, min_flux_det)
+                self.min_flux = lambda z: interp_min_flux_det(z) * flux_unit
                 self.cat["detected"] = np.array(
-                    self.cat["flux"].to(flux_unit).value
-                    > self.min_flux(self.cat["cosmo_redshift"])
+                    self.cat["flux"] > self.min_flux(self.cat["cosmo_redshift"])
                 )
 
             else:
@@ -2251,11 +2250,17 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 )
                 self.cat["detected"] = np.array(
                     self.cat["flux"] > self.min_flux)
-            logging.info("Wanted detected n_gal: {:e}".format(self.limit_ngal))
-            logging.info("Realized detected n_gal: {:e}".format(
-                self.n_gal_detected))
-            logging.info("Factor: {:.3f}".format(
-                self.n_gal_detected / self.limit_ngal))
+            if callable(self.limit_ngal):
+                logging.info("Wanted detected n_gal: from {}".format(
+                    self.limit_ngal_file))
+                logging.info("Realized detected n_gal: {:e}".format(
+                    self.n_gal_detected))
+            else:
+                logging.info("Wanted detected n_gal: {:e}".format(self.limit_ngal))
+                logging.info("Realized detected n_gal: {:e}".format(
+                    self.n_gal_detected))
+                logging.info("Factor: {:.3f}".format(
+                    self.n_gal_detected / self.limit_ngal))
 
         else:
             self.cat['detected'] = np.ones(self.cat['flux'].shape, dtype=bool)
