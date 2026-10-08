@@ -1846,9 +1846,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             .to(u.Mpc)
             .value
         )
-        # with RSD
+        # with RSD: 1 + z_obs = (1 + z_cosmo) * (1 + v_LOS / c)
         self.cat["RSD_redshift"] = (
-            self.cat["cosmo_redshift"] * self.cat["RSD_redshift_factor"]
+            (1 + self.cat["cosmo_redshift"]) * self.cat["RSD_redshift_factor"] - 1
         )
         self.cat["RSD_Position"] = (
             self.cat["Position"]
@@ -1895,9 +1895,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         self.cat["cosmo_redshift"] = self.redshift * \
             np.ones(len(self.cat['RSD_redshift_factor']))
         self.delta_redshift = 0.0
-        # with RSD
+        # with RSD: 1 + z_obs = (1 + z_cosmo) * (1 + v_LOS / c)
         self.cat["RSD_redshift"] = (
-            self.cat["cosmo_redshift"] * self.cat["RSD_redshift_factor"]
+            (1 + self.cat["cosmo_redshift"]) * self.cat["RSD_redshift_factor"] - 1
         )
         self.cat["RSD_Position"] = (
             self.cat["Position"]
