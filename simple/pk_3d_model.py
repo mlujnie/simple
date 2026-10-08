@@ -262,6 +262,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         Cached property that returns the galaxy power spectrum Pm_kspec.
         If self.RSD is True, it will return the Kaiser RSD approximation.
         Otherwise it will be just the bias squared times the matter power spectrum.
+        Modes with k_perp = 0 are set to zero, because the estimators remove them.
 
         Returns
         --------
@@ -280,6 +281,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             )
         else:
             Pm_kspec = self.bias**2 * self.Plin(self.kspec) * self.Mpch**3
+        # The power spectrum estimators subtract the mean of each slice along the LOS
+        # before applying the mask, which removes all modes with k_perp = 0 (and k = 0)
+        # from the data. Remove them from the model before the window convolution, too.
+        Pm_kspec[np.asarray(self.k_perp) == 0] = 0.0
         logging.info("Done.")
         return Pm_kspec
 
