@@ -1470,6 +1470,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         except:
             pass
         try:
+            del self.mean_ngal_per_redshift_mesh
+        except:
+            pass
+        try:
             del self.mean_redshift
         except:
             pass
@@ -2903,8 +2907,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def _get_prepared_n_gal_mesh(self):
         """
         Prepare the galaxy number density Fourier transform delta_g for the power spectrum calculations.
-        Performs normalization, subtracts the mean
-        galaxy number density per redshift, and applies an observation mask.
+        Divides by the expected mean galaxy number density per redshift, subtracts 1,
+        and applies an observation mask.
 
         Returns
         -------
@@ -2913,8 +2917,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         Notes
         -----
-        This function prepares the galaxy number density map for analysis by performing normalization, subtracting the mean
-        galaxy number density per redshift, and applying an observation mask.
+        This function prepares the galaxy number density map for analysis by dividing by the expected mean
+        galaxy number density per redshift (self.mean_ngal_per_redshift_mesh) and applying an observation mask.
 
         """
 
@@ -2924,9 +2928,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.paint_galaxy_mesh()
             galaxy_map = self.n_gal_mesh
 
-        mean_ngal_per_z = np.mean(self.n_gal_mesh, axis=(1, 2))[
-            :, None, None]
-        galaxy_map = (self.n_gal_mesh / mean_ngal_per_z).to(1) - 1.
+        # Divide by the expected mean number density at each redshift (from the
+        # luminosity function and the flux limit), like random catalogs built from
+        # the sensitivity. Dividing by the measured mean of each slice instead
+        # lowers P(k) by about twice the variance of the slice means.
+        galaxy_map = (self.n_gal_mesh / self.mean_ngal_per_redshift_mesh).to(1) - 1.
         galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
                                      Nmesh=self.N_mesh,
