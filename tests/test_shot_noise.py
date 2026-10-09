@@ -1,3 +1,6 @@
+import os
+import shutil
+import tempfile
 import unittest
 import warnings
 
@@ -5,6 +8,20 @@ import numpy as np
 import astropy.units as u
 from astropy.table import Table
 from scipy.integrate import quad
+
+
+def input_dict_with_growth_table(tmp_dir):
+    """Power_Spectrum_Model reads the growth rate f(k) from a file that only a run
+    of lognormal_galaxies writes, so a fresh checkout lacks it. These tests never
+    use f, so a constant table is enough."""
+    from simple.tools_python import yaml_file_to_dictionary
+
+    input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+    f_growth_filename = os.path.join(tmp_dir, "fnu.txt")
+    np.savetxt(f_growth_filename,
+               np.column_stack([np.logspace(-4, 2, 7), np.ones(7)]))
+    input_dict["f_growth_filename"] = f_growth_filename
+    return input_dict
 
 
 class TestLmax(unittest.TestCase):
@@ -35,10 +52,12 @@ class TestIntensityShotNoise(unittest.TestCase):
     def setUp(self):
         from simple.pk_3d_model import Power_Spectrum_Model
 
+        tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp_dir)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             self.pk = Power_Spectrum_Model(
-                "./tests/test_lim_input.yaml", do_model_shot_noise=False)
+                input_dict_with_growth_table(tmp_dir), do_model_shot_noise=False)
         # the tabulated luminosity function ends at 1000 * luminosity_unit
         self.L_table_max = 1000.0
 
