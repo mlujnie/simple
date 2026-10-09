@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import warnings
 
+import astropy.units as u
 import numpy as np
 
 
@@ -12,7 +13,7 @@ class TestModelRemovedModes(unittest.TestCase):
     modes with k_perp = 0. The galaxy field is divided by the expected mean density
     and keeps those modes, except k = 0. The model must remove the same modes."""
 
-    def model_3d(self, tracer):
+    def model_3d(self, tracer, min_flux_mesh=False):
         from simple.pk_3d_model import Power_Spectrum_Model
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -22,6 +23,8 @@ class TestModelRemovedModes(unittest.TestCase):
                     "./tests/test_lim_input.yaml", do_model_shot_noise=False,
                     out_filename=os.path.join(tmp, "model.h5"))
                 pk.get_kspec()
+                if min_flux_mesh:
+                    pk.min_flux = np.ones(pk.N_mesh) * 1e-17 * u.erg / u.s / u.cm**2
                 model = pk.get_3d_pk_model(
                     damping_function=1.0,
                     P_shot_smoothed=0.0 * pk.Mpch**3,
@@ -30,6 +33,7 @@ class TestModelRemovedModes(unittest.TestCase):
                     observed_volume=pk.box_volume,
                     box_volume=pk.box_volume,
                     Pk_unit=pk.Mpch**3,
+                    save=False,
                     tracer=tracer,
                     return_3d=True,
                 )[0]
@@ -54,6 +58,16 @@ class TestModelRemovedModes(unittest.TestCase):
         np.testing.assert_allclose(model[k_zero], 0.0, atol=atol)
         np.testing.assert_allclose(
             model[~k_zero], expected[~k_zero], rtol=1e-6, atol=atol)
+
+    def test_n_gal_with_flux_limit_mesh_drops_kperp_zero(self):
+        # With a min_flux mesh the galaxy field is divided by the measured mean of
+        # each slice, so the k_perp = 0 modes are removed as for intensity.
+        pk, model, expected, atol = self.model_3d("n_gal", min_flux_mesh=True)
+        self.assertTrue(pk.min_flux_is_mesh)
+        k_perp_zero = np.asarray(pk.k_perp) == 0
+        np.testing.assert_allclose(model[k_perp_zero], 0.0, atol=atol)
+        np.testing.assert_allclose(
+            model[~k_perp_zero], expected[~k_perp_zero], rtol=1e-6, atol=atol)
 
 
 class TestNgalNormalization(unittest.TestCase):
