@@ -7,6 +7,20 @@ import astropy.units as u
 import numpy as np
 
 
+def input_dict_with_growth_table(tmp_dir):
+    """Power_Spectrum_Model reads the growth rate f(k) from a file that only a run
+    of lognormal_galaxies writes, so a fresh checkout lacks it. These tests are in
+    real space and never use f, so a constant table is enough."""
+    from simple.tools_python import yaml_file_to_dictionary
+
+    input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+    f_growth_filename = os.path.join(tmp_dir, "fnu.txt")
+    np.savetxt(f_growth_filename,
+               np.column_stack([np.logspace(-4, 2, 7), np.ones(7)]))
+    input_dict["f_growth_filename"] = f_growth_filename
+    return input_dict
+
+
 class TestModelRemovedModes(unittest.TestCase):
     """The intensity estimator subtracts the mean of each slice along the line of
     sight, so the intensity field (and the cross power spectrum) has no power in
@@ -20,7 +34,7 @@ class TestModelRemovedModes(unittest.TestCase):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 pk = Power_Spectrum_Model(
-                    "./tests/test_lim_input.yaml", do_model_shot_noise=False,
+                    input_dict_with_growth_table(tmp), do_model_shot_noise=False,
                     out_filename=os.path.join(tmp, "model.h5"))
                 pk.get_kspec()
                 if min_flux_mesh:
