@@ -351,6 +351,18 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Getting 3D P(k) model.")
         print(self.Pm_kspec.unit, P_shot_smoothed.unit)
         model = (self.Pm_kspec) * damping_function  # + P_shot_smoothed
+        # Remove the modes the estimators remove, before the window convolution.
+        # The intensity estimator subtracts the mean of each slice along the LOS
+        # before applying the mask, so the intensity field (and the cross power
+        # spectrum) has no power at k_perp = 0. The galaxy field is divided by the
+        # expected mean and keeps those modes, except k = 0. If min_flux is a mesh,
+        # the galaxy field is divided by the measured mean of each slice instead,
+        # which removes k_perp = 0 as well.
+        if tracer == "n_gal" and not self.min_flux_is_mesh:
+            removed_modes = np.asarray(self.kspec) == 0
+        else:
+            removed_modes = np.asarray(self.k_perp) == 0
+        model = np.where(removed_modes, 0.0, model.value) * model.unit
         model = make_map(
             model.to(self.Mpch**3).value,
             Nmesh=self.N_mesh,
@@ -476,10 +488,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
                 ff[f"{tracer}/n_modes"] = n_modes
                 logging.info("Done")
-            if return_3d:
-                return model, mean_k, monopole, quadrupole
-            else:
-                return mean_k, monopole, quadrupole
+        if return_3d:
+            return model, mean_k, monopole, quadrupole
+        else:
+            return mean_k, monopole, quadrupole
 
     def model_shot_noise(self, N_real=10):
         """
