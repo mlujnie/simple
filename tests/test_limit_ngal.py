@@ -13,10 +13,9 @@ from simple.tools_python import yaml_file_to_dictionary
 TARGET = 1e-3
 
 
-def detected_density(limit_ngal):
+def mock_with_selection(limit_ngal):
     """Apply the selection function for the given limit_ngal to galaxies placed
-    uniformly in a small box (so lognormal_galaxies is not needed) and return
-    the number density of detected galaxies in 1/Mpc^3."""
+    uniformly in a small box (so lognormal_galaxies is not needed)."""
     input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
     input_dict["box_size"] = "np.array([256, 256, 256]) * u.Mpc / cosmo.h"
     del input_dict["min_flux"]  # the flux limit comes from limit_ngal instead
@@ -35,7 +34,23 @@ def detected_density(limit_ngal):
     lim.assign_luminosity()
     lim.assign_flux()
     lim.apply_selection_function()
+    return lim
+
+
+def detected_density(limit_ngal):
+    """Number density of detected galaxies in 1/Mpc^3."""
+    lim = mock_with_selection(limit_ngal)
     return (np.sum(lim.cat["detected"]) / lim.box_volume).to_value(1 / u.Mpc**3)
+
+
+def write_limit_ngal_table(tmp_dir):
+    """ECSV table with limit_ngal = TARGET at all redshifts; returns its file name."""
+    filename = os.path.join(tmp_dir, "limit_ngal.ecsv")
+    table = QTable()
+    table["redshift"] = np.linspace(1.5, 3.5, 21)
+    table["limit_ngal"] = np.full(21, TARGET) / u.Mpc**3
+    table.write(filename, format="ascii.ecsv")
+    return filename
 
 
 class TestLimitNgal(unittest.TestCase):
@@ -50,13 +65,23 @@ class TestLimitNgal(unittest.TestCase):
     def test_limit_ngal_table(self):
         # limit_ngal as a function of redshift, read from an ECSV table
         with tempfile.TemporaryDirectory() as tmp_dir:
-            filename = os.path.join(tmp_dir, "limit_ngal.ecsv")
-            table = QTable()
-            table["redshift"] = np.linspace(1.5, 3.5, 21)
-            table["limit_ngal"] = np.full(21, TARGET) / u.Mpc**3
-            table.write(filename, format="ascii.ecsv")
-            n_detected = detected_density(filename)
+            n_detected = detected_density(write_limit_ngal_table(tmp_dir))
         np.testing.assert_allclose(n_detected, TARGET, rtol=0.03)
+
+    def test_save_and_load_with_limit_ngal_table(self):
+        # The flux limit derived from the table must come back from the saved file,
+        # because the model uses it for the detected and undetected galaxies.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            lim = mock_with_selection(write_limit_ngal_table(tmp_dir))
+            filename = os.path.join(tmp_dir, "mock.h5")
+            lim.save_to_file(filename)
+            loaded = LognormalIntensityMock.from_file(filename, only_params=True)
+
+        z = lim.cat["cosmo_redshift"]
+        flux_unit = u.erg / u.s / u.cm**2
+        np.testing.assert_allclose(loaded.min_flux(z).to_value(flux_unit),
+                                   lim.min_flux(z).to_value(flux_unit), rtol=1e-12)
+        self.assertTrue(callable(loaded.limit_ngal))
 
 
 if __name__ == "__main__":

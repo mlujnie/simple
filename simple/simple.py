@@ -1239,6 +1239,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             The filename of the galaxy catalog file to save (default is None).
             If None, it does not save the galaxy catalog.
 
+        Notes
+        -----
+        If min_flux was derived from a limit_ngal table, it is also saved as a table
+        in <filename without extension>_min_flux.ecsv, which from_file reads.
+
         """
 
         attributes = []
@@ -1257,7 +1262,17 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             ff["mean_intensity"].attrs["unit"] = str(self.mean_intensity.unit)
 
             if callable(self.min_flux):
-                ff.attrs['min_flux'] = self.min_flux_file
+                if hasattr(self, "min_flux_table"):
+                    # min_flux was derived from a limit_ngal table: save it as a min_flux
+                    # table next to this file, which from_file reads like an input table
+                    min_flux_filename = os.path.splitext(filename)[0] + "_min_flux.ecsv"
+                    self.min_flux_table.write(
+                        min_flux_filename, format="ascii.ecsv", overwrite=True)
+                    ff.attrs['min_flux'] = min_flux_filename
+                else:
+                    ff.attrs['min_flux'] = self.min_flux_file
+            if callable(self.limit_ngal):
+                ff.attrs['limit_ngal'] = self.limit_ngal_file
             if callable(self.sigma_noise):
                 ff.attrs['sigma_noise'] = self.sigma_noise_file
 
@@ -2210,6 +2225,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 # min_flux returns a flux with units, like a min_flux table does
                 interp_min_flux_det = interp1d(redshifts, min_flux_det)
                 self.min_flux = lambda z: interp_min_flux_det(z) * flux_unit
+                # keep the derived flux limit as a table, so that save_to_file can save it
+                self.min_flux_table = Table(
+                    {"redshift": redshifts, "min_flux": np.array(min_flux_det) * flux_unit})
                 self.cat["detected"] = np.array(
                     self.cat["flux"] > self.min_flux(self.cat["cosmo_redshift"])
                 )
