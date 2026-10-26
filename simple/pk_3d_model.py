@@ -5,7 +5,6 @@ from astropy.table import Table
 from scipy.interpolate import interp1d
 import functools
 import logging
-from scipy.integrate import quad
 import h5py
 
 from simple.tools_python import (
@@ -190,6 +189,17 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
         """
         return self.luminosity_function_times_L(L) * L
+
+    def integrate_luminosity_function_times_Lsq(self, L_min, L_max):
+        """
+        Integral of the luminosity function times L**2 from L_min to L_max
+        (in units of self.luminosity_unit), on a log-spaced grid like in
+        mean_intensity_per_redshift. scipy's quad misses the luminosity function
+        when the range spans many decades (e.g. Lmax = 1e10 * Lmin) and returns 0.
+
+        """
+        Ls = np.logspace(np.log10(L_min), np.log10(L_max), 10000)
+        return np.trapz(self.luminosity_function_times_Lsq(Ls), Ls)
 
     def get_observed_volume(self):
         """ Returns the observed volume given the mask."""
@@ -535,12 +545,6 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         self.apply_selection_function()
         self.do_angular_smooth = False
         self.do_spectral_smooth = False
-        # for an unknown reason, Lmax sometimes just becomes a number and not a quantity.
-        # Then set it to infinity with a unit.
-        try:
-            self.Lmax.unit
-        except:
-            self.Lmax = np.inf * self.luminosity_unit
         self.paint_intensity_mesh(position="Position")
         self.paint_galaxy_mesh(position="Position")
         indices = np.arange(self.N_mesh[1]*self.N_mesh[2])
@@ -673,11 +677,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                         self.luminosity_unit).value
                     int_L_max = self.Lmax.to(
                         self.luminosity_unit).value
-                integral, error = quad(
-                    self.luminosity_function_times_Lsq,
-                    int_L_min,
-                    int_L_max,
-                )
+                integral = self.integrate_luminosity_function_times_Lsq(
+                    int_L_min, int_L_max)
                 H_sq_inv = 1 / self.astropy_cosmo.H(redshift) ** 2
 
                 rho_L_second_moment = (
@@ -703,11 +704,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         else:
             int_L_min = self.Lmin.to(self.luminosity_unit).value
             int_L_max = self.Lmax.to(self.luminosity_unit).value
-            integral, error = quad(
-                self.luminosity_function_times_Lsq,
-                int_L_min,
-                int_L_max,
-            )
+            integral = self.integrate_luminosity_function_times_Lsq(
+                int_L_min, int_L_max)
             mean_H_sq_inv_times_masksq = np.mean(
                 1 /
                 ( self.astropy_cosmo.H(self.redshift_mesh_axis) ** 2
