@@ -48,7 +48,7 @@ An example dictionary could look like this, where ``luminosity_function`` is a f
                         "cross": True,
                         "sky_subtracted_cross": True
                             },
-              "dk" : 0.04,
+              "nkbin" : 24,
               "kmin" : 0.04,
               "kmax" : 1.0,
               "seed_lognormal" : 100,
@@ -99,7 +99,7 @@ An example yaml file could look like this, where ``np`` will be interpreted as `
     n_gal : True
     cross : True
     sky_subtracted_cross : True
-    dk : 0.04
+    nkbin : 24
     kmin : 0.04
     kmax : 1.0
     seed_lognormal : 100

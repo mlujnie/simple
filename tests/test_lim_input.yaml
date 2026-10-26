@@ -34,7 +34,7 @@ run_pk :
   intensity : True 
   n_gal : True 
   cross : True
-dk : 0.04 
+nkbin : 24
 kmin : 0.04
 kmax : 1.
 
