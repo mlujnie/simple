@@ -2191,6 +2191,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                         .to(flux_unit)
                         .value
                     )
+                # min_flux returns a flux with units, like a min_flux table does
                 interp_min_flux_det = interp1d(redshifts, min_flux_det)
                 self.min_flux = lambda z: interp_min_flux_det(z) * flux_unit
                 self.cat["detected"] = np.array(
@@ -2250,15 +2251,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 )
                 self.cat["detected"] = np.array(
                     self.cat["flux"] > self.min_flux)
-            if callable(self.limit_ngal):
-                logging.info("Wanted detected n_gal: from {}".format(
-                    self.limit_ngal_file))
-                logging.info("Realized detected n_gal: {:e}".format(
-                    self.n_gal_detected))
-            else:
+            logging.info("Realized detected n_gal: {:e}".format(
+                self.n_gal_detected))
+            # limit_ngal from a table is a function of redshift, not a number
+            if not callable(self.limit_ngal):
                 logging.info("Wanted detected n_gal: {:e}".format(self.limit_ngal))
-                logging.info("Realized detected n_gal: {:e}".format(
-                    self.n_gal_detected))
                 logging.info("Factor: {:.3f}".format(
                     self.n_gal_detected / self.limit_ngal))
 
