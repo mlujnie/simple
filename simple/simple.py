@@ -572,10 +572,6 @@ class LognormalIntensityMock(BasicBoxCalculator):
         and the values are either True or False.
         Default for each key (if not given): False.
 
-    dk: astropy quantity, optional
-        Size of the linearly spaced wavenumber bins to calculate the power spectra (inverse length units).
-        Default: 2 pi / minimum box size.
-
     kmin: astropy quantity, optional
         Minimum k of the linearly spaced wavenumber bins to calculate the power spectra (inverse length units).
         Default: 0.
@@ -583,6 +579,15 @@ class LognormalIntensityMock(BasicBoxCalculator):
     kmax: astropy quantity, optional
         Maximum k of the linearly spaced wavenumber bins to calculate the power spectra (inverse length units).
         Default: minimum Nyquist frequency.
+
+    nkbin: int, optional
+        Number of linearly spaced wavenumber bins between kmin and kmax.
+        The bin width is dk = (kmax - kmin) / nkbin.
+        Default: bins as wide as the fundamental mode, 2 pi / minimum box size.
+
+    dk: astropy quantity, optional
+        Deprecated, use nkbin. If dk is given and nkbin is not, nkbin = floor((kmax - kmin) / dk) - 1
+        as in earlier versions, so the bins are wider than dk.
 
     obs_mask: ndarray (3,) or string
         If it is an ndarray, it should contain the mask (or weights) as floats 
@@ -908,10 +913,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             if tracer not in self.run_pk.keys():
                 self.run_pk[tracer] = False
 
-        if "dk" in input_dict.keys():
-            self.dk = input_dict["dk"]
-        else:
-            self.dk = 2 * np.pi / self.box_size.min()
+        # k bins of the power spectra: nkbin linearly spaced bins from kmin to kmax
         if "kmin" in input_dict.keys():
             self.kmin = input_dict["kmin"]
         else:
@@ -922,12 +924,23 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             self.kmax = (
                 np.pi * self.N_mesh.min() / self.box_size.max().to(self.Mpch)
             ).to(1 / self.Mpch)
-        try:
-            self.nkbin = np.floor(
-                (self.kmax - self.kmin) / self.dk).astype(int) - 1
-        except:
-            self.nkbin = np.floor(((self.kmax.to(1/self.Mpch).value - self.kmin.to(
-                1/self.Mpch).value)/self.dk.to(1/self.Mpch).value).astype(int) - 1)
+        if "nkbin" in input_dict.keys():
+            self.nkbin = int(input_dict["nkbin"])
+        elif "dk" in input_dict.keys():
+            # old input: keep the old number of bins, so old inputs give the same bins
+            dk = input_dict["dk"]
+            try:
+                self.nkbin = int(np.floor((self.kmax - self.kmin) / dk)) - 1
+            except:
+                self.nkbin = int(np.floor((self.kmax.to(1/self.Mpch).value - self.kmin.to(
+                    1/self.Mpch).value) / dk.to(1/self.Mpch).value)) - 1
+            logging.warning(
+                "dk is deprecated, use nkbin. Using nkbin = floor((kmax - kmin) / dk) - 1 = {}.".format(self.nkbin))
+        else:
+            # bins as wide as the fundamental mode (plain numbers count as h/Mpc)
+            k_range = u.Quantity(self.kmax, 1 / self.Mpch) - u.Quantity(self.kmin, 1 / self.Mpch)
+            k_fundamental = 2 * np.pi / self.box_size.min().to(self.Mpch)
+            self.nkbin = int(np.round((k_range / k_fundamental).to_value(1)))
 
         # initiate obs_mask
         if "obs_mask" in input_dict.keys():
@@ -2950,10 +2963,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def prepare_k_values(self):
         """ Prepares the dimensionless k values for the power spectrum calculations."""
         try:
-            dk = self.dk.to(self.Mpch**-1).value
-        except:
-            dk = self.dk
-        try:
             kmin = self.kmin.to(self.Mpch**-1).value
         except:
             kmin = self.kmin
@@ -2961,6 +2970,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             kmax = self.kmax.to(self.Mpch**-1).value
         except:
             kmax = self.kmax
+        # the bin width follows from the k range and the number of bins
+        dk = (kmax - kmin) / self.nkbin
         return (kmin, kmax, dk)
 
     def Pk_multipoles(self, tracer="intensity", save=False):

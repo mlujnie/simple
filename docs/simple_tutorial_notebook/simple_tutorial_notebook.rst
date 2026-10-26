@@ -122,7 +122,7 @@ dictionary or from a yaml file that contains this dictionary.
                             "cross": True,
                             "sky_subtracted_cross": True
                                 },
-                  "dk" : 0.04,
+                  "nkbin" : 24,
                   "kmin" : 0.04,
                   "kmax" : 1.0,
                   "seed_lognormal" : 100,
