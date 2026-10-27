@@ -1993,9 +1993,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         dlog_10_L = (
             max_log10_L_for_probability - min_log10_L_for_probability
         ) / N_probability
-        Ls = np.linspace(
-            min_log10_L_for_probability, max_log10_L_for_probability, N_probability
-        )
+        # The centres of N_probability cells of width dlog_10_L that tile
+        # [log10 Lmin, log10 Lmax]. Each galaxy picks a cell and is spread
+        # evenly in log10 L within it, so no luminosity is below Lmin or above Lmax.
+        Ls = min_log10_L_for_probability + \
+            (np.arange(N_probability) + 0.5) * dlog_10_L
         probability = self.log10_luminosity_function(Ls)
         probability = np.max([np.zeros(len(probability)), probability], axis=0)
         probability = probability / np.sum(probability)
