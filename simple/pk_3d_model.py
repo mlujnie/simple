@@ -369,9 +369,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         # measured mean of each slice and loses k_perp = 0 as well.
         min_flux_is_mesh = np.shape(self.min_flux) == tuple(self.N_mesh)
         if tracer == "n_gal" and not min_flux_is_mesh:
-            model[np.asarray(self.kspec) == 0] = 0
+            removed = np.asarray(self.kspec) == 0
         else:
-            model[np.asarray(self.k_perp) == 0] = 0
+            removed = np.asarray(self.k_perp) == 0
+        model[removed] = 0
         model = make_map(
             model.to(self.Mpch**3).value,
             Nmesh=self.N_mesh,
@@ -452,8 +453,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         model = (
             (
                 np.array(model) * self.Mpch**3
-                + S_bar * box_volume
-                + P_shot_smoothed * damping_function
+                # the estimators remove the noise from these modes too
+                + (S_bar * box_volume + P_shot_smoothed * damping_function) * ~removed
             )
             .to(Pk_unit)
             .value
