@@ -367,22 +367,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         the pixel noise, subtracts the mean of each slice (which removes
         k_perp = 0) and multiplies by the mask W. So:
 
-        - the Poisson noise is smoothed like the signal. Its power in each
-          slice without the mask is a^2. The angular damping with k_perp = 0
-          set to zero is convolved with the window W a, then multiplied by the
-          LOS damping. This is exact for any W without LOS smoothing, and for
-          any smoothing if W is the same in every slice: the LOS smoothing acts
-          on the noise times a(x_par), not on the noise alone.
+        - the Poisson noise is smoothed like the signal and masked after the
+          smoothing. Its power in each slice without the mask is a^2. The
+          damping D^2 with k_perp = 0 set to zero is convolved with the window
+          W a, as the signal is convolved with W w. This is exact for any W
+          (also one that changes along the LOS) if a is the same in all
+          slices, or if there is no LOS smoothing. Otherwise it assumes that a
+          changes little within the LOS smoothing length, like the signal.
         - the pixel noise is not smoothed: white_noise_through_window with
           a^2 = (sigma_noise / mean intensity)^2 * voxel volume.
         """
         removed = self.removed_modes("intensity")
         W = self.obs_mask * self.intensity_mask
         a_shot = np.sqrt(self.intensity_shot_noise_per_slice().to_value(self.Mpch**3))
-        D_sq_perp = self.D_sq_perp_of_k(self.k_perp, self.s_perp) * np.ones(np.shape(self.k_perp))
-        shot = self.convolve_window(
-            np.where(removed, 0.0, D_sq_perp), W * a_shot[:, None, None]
-        ) * self.D_sq_par_of_k(self.k_par, self.s_par)
+        D_sq = self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp)
+        shot = self.convolve_window(np.where(removed, 0.0, D_sq), W * a_shot[:, None, None])
         a2_pixel = (
             (sigma_noise * self.weight_mesh_im)**2 * self.voxel_volume).to_value(self.Mpch**3)
         pixel = self.white_noise_through_window(W, a2_pixel)
@@ -394,19 +393,19 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         the windows, in (Mpc/h)^3. The intensity map is smoothed once (damping D,
         the square root of D^2) and loses k_perp = 0 before the mask; the galaxy
         map is not smoothed. c is the cross noise in each slice without the
-        mask. As for the intensity (get_intensity_noise), the angular D with
-        k_perp = 0 set to zero is convolved with the windows W_g and W_I c,
-        then multiplied by the LOS D. The pixel noise does not correlate with
-        the galaxies.
+        mask. As for the intensity (get_intensity_noise), D with k_perp = 0
+        set to zero is convolved with the windows W_g and W_I c, which assumes
+        that c changes little within the LOS smoothing length. The pixel noise
+        does not correlate with the galaxies.
         """
         removed = self.removed_modes("cross")
         c = self.cross_shot_noise_per_slice().to_value(self.Mpch**3)
-        D_perp = np.sqrt(self.D_sq_perp_of_k(self.k_perp, self.s_perp)) * np.ones(np.shape(self.k_perp))
+        D = np.sqrt(self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp))
         noise = self.convolve_window(
-            np.where(removed, 0.0, D_perp),
+            np.where(removed, 0.0, D),
             self.obs_mask * self.galaxy_mask,
             self.obs_mask * self.intensity_mask * c[:, None, None],
-        ) * np.sqrt(self.D_sq_par_of_k(self.k_par, self.s_par))
+        )
         return noise * self.Mpch**3
 
     def get_3d_pk_model(

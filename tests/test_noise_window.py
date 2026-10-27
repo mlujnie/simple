@@ -31,6 +31,15 @@ def sky_mask(pk, seed=1):
     return np.broadcast_to(W, tuple(n)).copy()
 
 
+def los_mask(pk, seed=2):
+    """sky_mask times weights that change from cell to cell, with a quarter
+    of the cells masked: a mask that also changes along the LOS, like one
+    that masks single pixels of the smoothed map."""
+    rng = np.random.RandomState(seed)
+    return (sky_mask(pk) * rng.uniform(0.5, 1.5, tuple(pk.N_mesh))
+            * (rng.uniform(size=tuple(pk.N_mesh)) > 0.25))
+
+
 def smooth(pk, field, D):
     """field smoothed with the damping D (not squared) on the k grid."""
     return np.array(make_map(np.array(make_map(field, Nmesh=pk.N_mesh,
@@ -80,8 +89,7 @@ class TestNoiseThroughWindow(unittest.TestCase):
         # Pixel noise sigma / sqrt(mask), not smoothed, with a mask that also
         # changes along the LOS: the model is exact.
         pk = power_model()
-        rng = np.random.RandomState(2)
-        pk.obs_mask = sky_mask(pk) * rng.uniform(0.5, 1.5, (pk.N_mesh[0], 1, 1))
+        pk.obs_mask = los_mask(pk)
         observed = pk.obs_mask > 0
         sigma = 0.05 / np.sqrt(np.where(observed, pk.obs_mask, 1.0)) * observed
         pk.noise_mesh = None
@@ -95,57 +103,81 @@ class TestNoiseThroughWindow(unittest.TestCase):
         self.assertGreater(np.max(np.abs(old - exact)) / np.max(exact), 0.1)
 
     def test_poisson_noise(self):
-        # Poisson noise with a power a^2(x_par) per slice, smoothed along and
-        # across the LOS like the signal, with a mask that is the same in
-        # every slice: the model is exact.
-        pk = power_model()
-        pk.obs_mask = sky_mask(pk)
-        pk.s_par, pk.s_perp = 40.0, 50.0  # Mpc/h, comparable to the cells
-        a2 = pk.intensity_shot_noise_per_slice().to_value(pk.Mpch**3)
-        D = np.sqrt(pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp))
-        exact = exact_noise(pk, a2[:, None, None] * np.ones(pk.N_mesh),
-                            lambda unit: smooth(pk, unit, D))
-        model = pk.get_intensity_noise(0 * pk.mean_intensity).to_value(pk.Mpch**3)
-        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
-        # adding the noise after the window, as before, is off by more than 10%
-        kept = np.asarray(pk.k_perp) > 0
-        old = pk.get_intensity_shot_noise().to_value(pk.Mpch**3) * D**2 * kept
-        self.assertGreater(np.max(np.abs(old - exact)) / np.max(exact), 0.1)
+        # Poisson noise with a power a^2(x_par) per slice, smoothed like the
+        # signal and masked after the smoothing, with a mask that also changes
+        # along the LOS. The model is exact if a is the same in every slice,
+        # or without LOS smoothing.
+        for constant_a, s_par in [(True, 40.0), (False, 0.0)]:
+            with self.subTest(constant_a=constant_a, s_par=s_par):
+                pk = power_model()
+                pk.obs_mask = los_mask(pk)
+                pk.s_par, pk.s_perp = s_par, 50.0  # Mpc/h, comparable to the cells
+                a2 = pk.intensity_shot_noise_per_slice()
+                if constant_a:
+                    a2_constant = np.mean(a2) * np.ones(len(a2))
+                    pk.intensity_shot_noise_per_slice = lambda: a2_constant
+                    a2 = a2_constant
+                a2 = a2.to_value(pk.Mpch**3)
+                D = np.sqrt(pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp))
+                exact = exact_noise(pk, a2[:, None, None] * np.ones(pk.N_mesh),
+                                    lambda unit: smooth(pk, unit, D))
+                model = pk.get_intensity_noise(0 * pk.mean_intensity).to_value(pk.Mpch**3)
+                np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
+                # adding the noise after the window, as before, is off by more than 10%
+                kept = np.asarray(pk.k_perp) > 0
+                old = pk.get_intensity_shot_noise().to_value(pk.Mpch**3) * D**2 * kept
+                self.assertGreater(np.max(np.abs(old - exact)) / np.max(exact), 0.1)
 
     def test_cross_noise(self):
         # The intensity map is smoothed and loses k_perp = 0, the galaxy map
-        # does neither; c(x_par) is the covariance of the two per cell.
-        pk = power_model()
-        pk.obs_mask = sky_mask(pk)
-        pk.s_par, pk.s_perp = 40.0, 50.0  # Mpc/h
-        c = pk.cross_shot_noise_per_slice().to_value(pk.Mpch**3)[:, None, None]
-        D = np.sqrt(pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp))
-        # a noise of power c^2 in the intensity map and of power 1 in the galaxy
-        # map (the same noise divided by c): their covariance is c
-        exact = exact_noise(pk, c**2 * np.ones(pk.N_mesh), lambda unit: smooth(pk, unit, D),
-                            lambda unit: unit / c)
-        model = pk.get_cross_noise().to_value(pk.Mpch**3)
-        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
-        # adding the noise after the window, as before, is off by more than 10%
-        kept = np.asarray(pk.k_perp) > 0
-        old = pk.get_cross_shot_noise().to_value(pk.Mpch**3) * D * kept
-        self.assertGreater(np.max(np.abs(old - exact)) / np.max(np.abs(exact)), 0.1)
+        # does neither; c(x_par) is the covariance of the two per cell. Exact
+        # in the same cases as the intensity Poisson noise.
+        for constant_c, s_par in [(True, 40.0), (False, 0.0)]:
+            with self.subTest(constant_c=constant_c, s_par=s_par):
+                pk = power_model()
+                pk.obs_mask = los_mask(pk)
+                pk.s_par, pk.s_perp = s_par, 50.0  # Mpc/h
+                c = pk.cross_shot_noise_per_slice()
+                if constant_c:
+                    c_constant = np.mean(c) * np.ones(len(c))
+                    pk.cross_shot_noise_per_slice = lambda: c_constant
+                    c = c_constant
+                c = c.to_value(pk.Mpch**3)[:, None, None]
+                D = np.sqrt(pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp))
+                # a noise of power c^2 in the intensity map and of power 1 in the
+                # galaxy map (the same noise divided by c): their covariance is c
+                exact = exact_noise(pk, c**2 * np.ones(pk.N_mesh), lambda unit: smooth(pk, unit, D),
+                                    lambda unit: unit / c)
+                model = pk.get_cross_noise().to_value(pk.Mpch**3)
+                np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
+                # adding the noise after the window, as before, is off by more than 10%
+                kept = np.asarray(pk.k_perp) > 0
+                old = pk.get_cross_shot_noise().to_value(pk.Mpch**3) * D * kept
+                self.assertGreater(np.max(np.abs(old - exact)) / np.max(np.abs(exact)), 0.1)
 
     def test_no_mask(self):
-        # Without a mask the noise is the same as before: P_shot D^2 + S_bar V
-        # for intensity and P_shot D for cross, 0 at k_perp = 0.
-        pk = power_model(N_mesh=16)
-        kept = np.asarray(pk.k_perp) > 0
-        D_sq = pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp)
-        S_bar_V = (pk.get_S_bar(pk.weight_mesh_im * pk.obs_mask, pk.sigma_noise)
-                   * pk.box_volume).to_value(pk.Mpch**3)
-        expected = (pk.get_intensity_shot_noise().to_value(pk.Mpch**3) * D_sq + S_bar_V) * kept
-        model = pk.get_intensity_noise(pk.sigma_noise).to_value(pk.Mpch**3)
-        np.testing.assert_allclose(model, expected, rtol=1e-5, atol=1e-6 * np.max(expected))
-        expected = pk.get_cross_shot_noise().to_value(pk.Mpch**3) * np.sqrt(D_sq) * kept
-        model = pk.get_cross_noise().to_value(pk.Mpch**3)
-        np.testing.assert_allclose(model, expected, rtol=1e-5, atol=1e-6 * np.max(expected))
-
+        # Without a mask the noise is P_shot D^2 + S_bar V for intensity and
+        # P_shot D for cross, 0 at k_perp = 0, as before, if the Poisson noise
+        # is the same in every slice. If it changes along the LOS, the new
+        # model smooths it after the noise power a^2(x_par) is applied; the
+        # old one used its mean. The two differ by 3e-4 of P_shot here.
+        for constant_a, rtol in [(True, 1e-5), (False, 1e-3)]:
+            with self.subTest(constant_a=constant_a):
+                pk = power_model(N_mesh=16)
+                if constant_a:
+                    a2 = pk.intensity_shot_noise_per_slice()
+                    a2_constant = np.mean(a2) * np.ones(len(a2))
+                    pk.intensity_shot_noise_per_slice = lambda: a2_constant
+                kept = np.asarray(pk.k_perp) > 0
+                D_sq = pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp)
+                S_bar_V = (pk.get_S_bar(pk.weight_mesh_im * pk.obs_mask, pk.sigma_noise)
+                           * pk.box_volume).to_value(pk.Mpch**3)
+                expected = (pk.get_intensity_shot_noise().to_value(pk.Mpch**3) * D_sq + S_bar_V) * kept
+                model = pk.get_intensity_noise(pk.sigma_noise).to_value(pk.Mpch**3)
+                np.testing.assert_allclose(model, expected, rtol=rtol, atol=rtol * np.max(expected))
+                expected = pk.get_cross_shot_noise().to_value(pk.Mpch**3) * np.sqrt(D_sq) * kept
+                model = pk.get_cross_noise().to_value(pk.Mpch**3)
+                np.testing.assert_allclose(model, expected, rtol=1e-5, atol=1e-6 * np.max(expected))
 
 if __name__ == "__main__":
     unittest.main()
