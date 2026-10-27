@@ -298,6 +298,118 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """ Nyquist frequency in [h/Mpc]."""
         return self.k_Nyquist[0].value
 
+    def removed_modes(self, tracer):
+        """
+        The modes (True on the k grid) that the estimators remove. The
+        intensity estimator subtracts the mean of each slice along the LOS, so
+        intensity and cross have no power at k_perp = 0. The galaxy field is
+        divided by the expected mean density and only loses k = 0, unless
+        min_flux is a mesh: then it loses k_perp = 0 as well.
+        """
+        min_flux_is_mesh = np.shape(self.min_flux) == tuple(self.N_mesh)
+        if tracer == "n_gal" and not min_flux_is_mesh:
+            return np.asarray(self.kspec) == 0
+        return np.asarray(self.k_perp) == 0
+
+    def convolve_window(self, model, mask_window_function_1, mask_window_function_2=None):
+        """
+        Convolves a power spectrum on the k grid (array, in (Mpc/h)^3) with the
+        window functions of the two fields (Eqs. 11 and 13 of the SIMPLE paper):
+        the correlation function is multiplied by the correlation of the two
+        windows in real space and transformed back. Returns the convolved
+        power on the k grid (array, in (Mpc/h)^3).
+        """
+        logging.info("Convolving P(k) with the window function.")
+
+        def to_map(field, **kwargs):
+            return make_map(field, Nmesh=self.N_mesh,
+                            BoxSize=self.box_size.to(self.Mpch).value, **kwargs)
+
+        xi = to_map(model, type="complex").c2r()
+        window_ft_1 = to_map(mask_window_function_1).r2c()
+        if mask_window_function_2 is None:
+            window_ft_2 = window_ft_1
+        else:
+            window_ft_2 = to_map(mask_window_function_2).r2c()
+        window_correlation = (window_ft_1 * np.conjugate(window_ft_2)).c2r()
+        return np.array((xi * window_correlation).r2c())
+
+    def white_noise_through_window(self, mask_window_function, noise_power):
+        """
+        Power on the k grid of a noise that is white before the mask, with the
+        power noise_power (array, in (Mpc/h)^3) in each cell, after the mean of
+        each slice along the LOS is subtracted (which removes k_perp = 0) and
+        the map is multiplied by the window W. With a^2 = noise_power,
+
+            N(k) = mean(W^2 a^2) - mean over the slices of
+                   [2 Re(hat(W a^2) conj(hat(W))) - mean_perp(a^2) |hat(W)|^2](k_perp),
+
+        where hat is the 2D Fourier transform of a slice divided by the number
+        of cells in the slice, and mean_perp the mean over a slice. The second
+        term is there because the slice mean is taken before the mask, over
+        all cells of the slice; without a mask it is mean(a^2) at k_perp = 0
+        and 0 elsewhere. For noise that is not smoothed, like the pixel noise.
+        """
+        W = np.broadcast_to(np.asarray(mask_window_function, dtype=float), tuple(self.N_mesh))
+        a2 = np.broadcast_to(np.asarray(noise_power, dtype=float), tuple(self.N_mesh))
+        n_perp = self.N_mesh[1] * self.N_mesh[2]
+        W_hat = np.fft.rfft2(W) / n_perp  # transform of each slice, on the k_perp grid
+        Wa2_hat = np.fft.rfft2(W * a2) / n_perp
+        a2_perp = np.mean(a2, axis=(1, 2))[:, None, None]
+        correction = np.mean(
+            2 * np.real(Wa2_hat * np.conj(W_hat)) - a2_perp * np.abs(W_hat)**2, axis=0)
+        return np.mean(W**2 * a2) - correction * np.ones(np.shape(self.k_perp))
+
+    def get_intensity_noise(self, sigma_noise):
+        """
+        Noise power of the intensity map (divided by its mean) on the k grid,
+        through the window, in (Mpc/h)^3. The estimator smooths the map, adds
+        the pixel noise, subtracts the mean of each slice (which removes
+        k_perp = 0) and multiplies by the mask W. So:
+
+        - the Poisson noise is smoothed like the signal and masked after the
+          smoothing. Its power in each slice without the mask is a^2. The
+          damping D^2 with k_perp = 0 set to zero is convolved with the window
+          W a, as the signal is convolved with W w. This is exact for any W
+          (also one that changes along the LOS) if a is the same in all
+          slices, or if there is no LOS smoothing. Otherwise it assumes that a
+          changes little within the LOS smoothing length, like the signal;
+          the error is of second order in s_par * dln(a)/dx_par, also
+          without a mask, where the noise is exactly mean(a^2) D^2.
+        - the pixel noise is not smoothed: white_noise_through_window with
+          a^2 = (sigma_noise / mean intensity)^2 * voxel volume.
+        """
+        removed = self.removed_modes("intensity")
+        W = self.obs_mask * self.intensity_mask
+        a_shot = np.sqrt(self.intensity_shot_noise_per_slice().to_value(self.Mpch**3))
+        D_sq = self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp)
+        shot = self.convolve_window(np.where(removed, 0.0, D_sq), W * a_shot[:, None, None])
+        a2_pixel = (
+            (sigma_noise * self.weight_mesh_im)**2 * self.voxel_volume).to_value(self.Mpch**3)
+        pixel = self.white_noise_through_window(W, a2_pixel)
+        return (shot + pixel) * self.Mpch**3
+
+    def get_cross_noise(self):
+        """
+        Poisson noise power of the cross power spectrum on the k grid, through
+        the windows, in (Mpc/h)^3. The intensity map is smoothed once (damping D,
+        the square root of D^2) and loses k_perp = 0 before the mask; the galaxy
+        map is not smoothed. c is the cross noise in each slice without the
+        mask. As for the intensity (get_intensity_noise), D with k_perp = 0
+        set to zero is convolved with the windows W_g and W_I c, which assumes
+        that c changes little within the LOS smoothing length. The pixel noise
+        does not correlate with the galaxies.
+        """
+        removed = self.removed_modes("cross")
+        c = self.cross_shot_noise_per_slice().to_value(self.Mpch**3)
+        D = np.sqrt(self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp))
+        noise = self.convolve_window(
+            np.where(removed, 0.0, D),
+            self.obs_mask * self.galaxy_mask,
+            self.obs_mask * self.intensity_mask * c[:, None, None],
+        )
+        return noise * self.Mpch**3
+
     def get_3d_pk_model(
         self,
         damping_function,
@@ -311,7 +423,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         mask_window_function_2=None,
         save=True,
         tracer=None,
-        return_3d=False
+        return_3d=False,
+        noise=None,
     ):
         """
         Calculates the 3D power spectrum model P(k) by incorporating smoothing, convolution with the window function,
@@ -347,6 +460,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             The tracer label in the saved file. Default is None.
         return_3d: bool, optional
             Set to True if you want to return the 3D model as well.
+        noise : astropy quantity array, optional
+            The noise power on the k grid, already through the window
+            (see get_intensity_noise and get_cross_noise).
+            If None, S_bar * box_volume + P_shot_smoothed * damping_function
+            is added after the window in all but the removed modes, which is
+            exact only without a mask.
 
         Returns:
         --------
@@ -362,77 +481,13 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         print(self.Pm_kspec.unit, P_shot_smoothed.unit)
         model = (self.Pm_kspec) * damping_function  # + P_shot_smoothed
         # Set to zero the modes that the estimators remove, before the window
-        # convolution. The intensity estimator subtracts the mean of each slice
-        # along the LOS, so intensity and cross have no power at k_perp = 0.
-        # The galaxy field is divided by the expected mean density and only
-        # loses k = 0, unless min_flux is a mesh: then it is divided by the
-        # measured mean of each slice and loses k_perp = 0 as well.
-        min_flux_is_mesh = np.shape(self.min_flux) == tuple(self.N_mesh)
-        if tracer == "n_gal" and not min_flux_is_mesh:
-            removed = np.asarray(self.kspec) == 0
-        else:
-            removed = np.asarray(self.k_perp) == 0
+        # convolution (see removed_modes).
+        removed = self.removed_modes(tracer)
         model[removed] = 0
-        model = make_map(
-            model.to(self.Mpch**3).value,
-            Nmesh=self.N_mesh,
-            BoxSize=self.box_size.to(self.Mpch).value,
-            type="complex",
-        )
-        # if np.size(mask_window_function_1) == 1:
-        #    convolve = False
-        # if mask_window_function_2 is not None:
-        #    if np.size(mask_window_function_2) > 1:
-        #        convolve = (
-        #            True  # convolve anyway if one of the window functions is a mesh.
-        #        )
+        model = model.to(self.Mpch**3).value
         if convolve:
-            logging.info("Convolving P(k) with the window function.")
-            # model_ft = np.fft.fftn(model) / np.prod(model.shape)
-            model_ft = model.c2r()
-            print("model_ft.shape: ", model_ft.shape)
-            del model
-            # window_function_ft_1 = np.fft.fftn(mask_window_function_1)
-            mask_window_function_1 = make_map(
-                mask_window_function_1,
-                Nmesh=self.N_mesh,
-                BoxSize=self.box_size.to(self.Mpch).value,
-            )
-            if mask_window_function_2 is None:
-                mean_window_function = np.mean(mask_window_function_1**2)
-            else:
-                mean_window_function = np.mean(
-                    mask_window_function_1 * mask_window_function_2
-                )
-            window_function_ft_1 = mask_window_function_1.r2c()
-            del mask_window_function_1
-            if mask_window_function_2 is not None:
-                # window_function_ft_2 = np.fft.fftn(mask_window_function_2)
-                mask_window_function_2 = make_map(
-                    mask_window_function_2,
-                    Nmesh=self.N_mesh,
-                    BoxSize=self.box_size.to(self.Mpch).value,
-                )
-                window_function_ft_2 = mask_window_function_2.r2c()
-                # window_function_ft_sq_back = np.fft.ifftn(
-                #    window_function_ft_1 * np.conjugate(window_function_ft_2)
-                # )
-                window_function_ft_sq_back = (
-                    window_function_ft_1 * np.conjugate(window_function_ft_2)
-                ).c2r()
-                del window_function_ft_2
-            else:
-                # window_function_ft_sq_back = np.fft.ifftn(
-                #    window_function_ft_1 * np.conjugate(window_function_ft_1)
-                # )
-                window_function_ft_sq_back = (
-                    window_function_ft_1 * np.conjugate(window_function_ft_1)
-                ).c2r()
-                del window_function_ft_1
-            # model = np.fft.ifftn(model_ft * window_function_ft_sq_back)
-            model = (model_ft * window_function_ft_sq_back).r2c()
-            del model_ft
-            del window_function_ft_sq_back
+            model = self.convolve_window(
+                model, mask_window_function_1, mask_window_function_2)
         else:
             if mask_window_function_2 is None:
                 model = (
@@ -450,15 +505,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 )  # Q_bar
         print("S_bar * box_volume: ", (S_bar * box_volume))
         print("P_shot_smoothed: {}".format(P_shot_smoothed))
-        model = (
-            (
-                np.array(model) * self.Mpch**3
-                # the estimators remove the noise from these modes too
-                + (S_bar * box_volume + P_shot_smoothed * damping_function) * ~removed
-            )
-            .to(Pk_unit)
-            .value
-        )
+        if noise is None:
+            # the estimators remove the noise from these modes too
+            noise = (S_bar * box_volume + P_shot_smoothed * damping_function) * ~removed
+        model = (np.array(model) * self.Mpch**3 + noise).to(Pk_unit).value
 
         (
             mean_k,
@@ -653,18 +703,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             " - cross: {}".format(np.mean(self.cross_shot_noise_model)))
         return
 
-    def get_intensity_shot_noise(self):
+    def intensity_shot_noise_per_slice(self):
         """
-        Calculates the shot noise (from randomly sampling the number of galaxies and the 
-        luminosity of each galaxy), which is subject to smoothing from the second moment
-        of the luminosity function.
+        Poisson noise power of the intensity map (divided by its mean) in each
+        slice along the LOS, without the mask, in (Mpc/h)^3. It comes from
+        randomly sampling the number of galaxies and the luminosity of each
+        galaxy (second moment of the luminosity function) and is smoothed
+        like the signal.
 
         """
-
-        if self.galaxy_selection["intensity"] in ["detected", "undetected"]:
-            intensity_second_moment = []
-            assert (len(self.redshift_mesh_axis) == self.obs_mask.shape[0])
-            for i, redshift in enumerate(self.redshift_mesh_axis):
+        selection = self.galaxy_selection["intensity"]
+        int_L_min = self.Lmin.to(self.luminosity_unit).value
+        int_L_max = self.Lmax.to(self.luminosity_unit).value
+        P_shot = []
+        for redshift in self.redshift_mesh_axis:
+            if selection in ["detected", "undetected"]:
                 if callable(self.min_flux):
                     F_min = self.min_flux(redshift)
                 else:
@@ -674,93 +727,53 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                     * 4
                     * np.pi
                     * self.astropy_cosmo.luminosity_distance(redshift) ** 2
-                )
-                int_L_limit = int_L_limit.to(self.luminosity_unit)
-                if self.galaxy_selection["intensity"] == "detected":
-                    int_L_min = int_L_limit.value
-                    int_L_max = self.Lmax.to(
-                        self.luminosity_unit).value
-                elif self.galaxy_selection["intensity"] == "undetected":
-                    int_L_min = self.Lmin.to(
-                        self.luminosity_unit).value
-                    int_L_max = int_L_limit.value
+                ).to(self.luminosity_unit).value
+                if selection == "detected":
+                    int_L_min = int_L_limit
                 else:
-                    int_L_min = self.Lmin.to(
-                        self.luminosity_unit).value
-                    int_L_max = self.Lmax.to(
-                        self.luminosity_unit).value
-                integral = self.integrate_luminosity_function_times_Lsq(
-                    int_L_min, int_L_max)
-                H_sq_inv = 1 / self.astropy_cosmo.H(redshift) ** 2
-
-                rho_L_second_moment = (
-                    integral * self.luminosity_unit**2 / u.Mpc**3
-                )
-                factor = const.c / (
-                    4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr)  * (1 + redshift)**2
-                )
-                int_sec_mom = rho_L_second_moment * factor**2 * H_sq_inv
-                int_sec_mom = int_sec_mom * np.mean(self.obs_mask[i]**2 * self.intensity_mask[i]**2)
-                int_sec_mom_unit = int_sec_mom.unit
-                intensity_second_moment.append(int_sec_mom.value)
-            intensity_second_moment = (
-                np.array(intensity_second_moment) * int_sec_mom_unit
-            )
-            P_shot = (
-                np.mean(
-                    (intensity_second_moment / self.mean_intensity**2)
-                    .to(self.Mpch**3)
-                    .value
-                )
-            ) * self.Mpch**3
-        else:
-            int_L_min = self.Lmin.to(self.luminosity_unit).value
-            int_L_max = self.Lmax.to(self.luminosity_unit).value
+                    int_L_max = int_L_limit
             integral = self.integrate_luminosity_function_times_Lsq(
                 int_L_min, int_L_max)
-            mean_H_sq_inv_times_masksq = np.mean(
-                1 /
-                ( self.astropy_cosmo.H(self.redshift_mesh_axis) ** 2
-                    * (1 + self.redshift_mesh_axis)**4 )
-                * np.mean(self.obs_mask**2 * self.intensity_mask**2, axis=(1, 2)),
-            )
             rho_L_second_moment = integral * self.luminosity_unit**2 / u.Mpc**3
-            factor = const.c / \
-                (4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr))
-            int_sec_mom = rho_L_second_moment * factor**2 * mean_H_sq_inv_times_masksq
+            factor = const.c / (
+                4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr) * (1 + redshift)**2
+            )
+            int_sec_mom = rho_L_second_moment * factor**2 / self.astropy_cosmo.H(redshift) ** 2
+            P_shot.append((int_sec_mom / self.mean_intensity**2).to(self.Mpch**3).value)
+        return np.array(P_shot) * self.Mpch**3
 
-            P_shot = (int_sec_mom / self.mean_intensity **
-                      2).to(self.Mpch**3)
-            logging.info("intensity P_shot: {}".format(P_shot))
+    def get_intensity_shot_noise(self):
+        """
+        Calculates the shot noise (from randomly sampling the number of galaxies and the 
+        luminosity of each galaxy), which is subject to smoothing from the second moment
+        of the luminosity function: the mean over the slices of
+        intensity_shot_noise_per_slice times the mean of the squared mask.
+
+        """
+        assert (len(self.redshift_mesh_axis) == self.obs_mask.shape[0])
+        mask_sq = np.mean(self.obs_mask**2 * self.intensity_mask**2, axis=(1, 2))
+        P_shot = np.mean(self.intensity_shot_noise_per_slice() * mask_sq)
+        logging.info("intensity P_shot: {}".format(P_shot))
         return P_shot
 
-    def get_cross_shot_noise(self):
+    def cross_shot_noise_per_slice(self):
         """
-        Calculates the shot noise of the cross power spectrum 
-        that originates from randomly sampling the number of galaxies
-        and their luminosity from the first moment of the luminosity function
-        that includes only the galaxies overlapping in both fields.
+        Poisson noise of the cross power spectrum in each slice along the LOS,
+        without the mask, in (Mpc/h)^3: mean intensity / (mean intensity of the
+        box * mean galaxy density) of the galaxies that are in both maps.
 
         """
-
-        galaxy_selections = self.galaxy_selection
-
-        if ("detected" in galaxy_selections.values()) and (
-            "undetected" in galaxy_selections.values()
-        ):
-            return 0.0 * self.Mpch**3
-        elif (
-            "detected" in galaxy_selections.values()
-        ):  # therefore 'undetected' is not present.
+        galaxy_selections = self.galaxy_selection.values()
+        if ("detected" in galaxy_selections) and ("undetected" in galaxy_selections):
+            # no galaxy is in both maps
+            return np.zeros(len(self.redshift_mesh_axis)) * self.Mpch**3
+        elif "detected" in galaxy_selections:  # therefore 'undetected' is not present.
             galaxy_selection = "detected"
-        elif (
-            "undetected" in galaxy_selections.values()
-        ):  # therefore 'detected' is not present
+        elif "undetected" in galaxy_selections:  # therefore 'detected' is not present
             galaxy_selection = "undetected"
         else:  # both are 'all'
-            return 1 / self.n_bar_gal
-
-        P_shot = np.mean(
+            galaxy_selection = "all"
+        return (
             self.mean_intensity_per_redshift(
                 self.redshift_mesh_axis, galaxy_selection=galaxy_selection
             )
@@ -769,10 +782,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 self.redshift_mesh_axis,
                 tracer="n_gal",
                 galaxy_selection=galaxy_selection,
-            ) * np.mean(self.obs_mask**2 * self.intensity_mask * self.galaxy_mask, axis=(1, 2))
+            )
         ).to(self.Mpch**3)
 
-        return P_shot
+    def get_cross_shot_noise(self):
+        """
+        Calculates the shot noise of the cross power spectrum 
+        that originates from randomly sampling the number of galaxies
+        and their luminosity from the first moment of the luminosity function
+        that includes only the galaxies overlapping in both fields:
+        the mean over the slices of cross_shot_noise_per_slice times the mean
+        of the product of the masks.
+
+        """
+        mask = np.mean(self.obs_mask**2 * self.intensity_mask * self.galaxy_mask, axis=(1, 2))
+        return np.mean(self.cross_shot_noise_per_slice() * mask)
 
     @functools.cached_property
     def mean_intensity_per_redshift_mesh(self):
@@ -844,12 +868,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             * self.mean_intensity_per_redshift_mesh.to(self.mean_intensity)
             * self.weight_mesh_im
         ).to(1)
+        noise = None
         if self.do_model_shot_noise:
             if self.im_shot_noise_model is None:
                 self.model_shot_noise()
             P_shot_smoothed = self.im_shot_noise_model
         else:
             P_shot_smoothed = self.get_intensity_shot_noise()
+            if not sky_subtraction:
+                # the noise through the window, after the k_perp = 0 modes are removed
+                noise = self.get_intensity_noise(sigma_noise_im)
         S_bar_im = self.get_S_bar(
             self.weight_mesh_im * self.intensity_mask * self.obs_mask, sigma_noise_im)
         logging.info("\nS_bar intensity: {}\n".format(
@@ -871,7 +899,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             convolve=True,
             save=True,
             tracer=tracer,
-            return_3d=return_3d
+            return_3d=return_3d,
+            noise=noise,
         )
         if return_3d:
             (model,
@@ -977,6 +1006,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             damping_function = damping_function * (
                 1 - np.sqrt(self.D_sq_tophat_of_k(self.k_perp, self.s_perp_sky))
             )
+        noise = None
+        if not (self.do_model_shot_noise or sky_subtraction):
+            # the noise through the windows, after the k_perp = 0 modes are removed
+            noise = self.get_cross_noise()
         observed_volume = self.get_observed_volume()
         if sky_subtraction:
             tracer = "sky_subtracted_cross"
@@ -996,7 +1029,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             mask_window_function_2=mask_window_function_2,
             save=True,
             tracer=tracer,
-            return_3d=return_3d
+            return_3d=return_3d,
+            noise=noise,
         )
         if return_3d:
             (model,
