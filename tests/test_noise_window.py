@@ -1,6 +1,5 @@
 import unittest
 
-import astropy.units as u
 import numpy as np
 
 from simple.pk_3d_model import Power_Spectrum_Model
