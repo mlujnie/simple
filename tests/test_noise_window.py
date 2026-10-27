@@ -156,11 +156,12 @@ class TestNoiseThroughWindow(unittest.TestCase):
                 self.assertGreater(np.max(np.abs(old - exact)) / np.max(np.abs(exact)), 0.1)
 
     def test_no_mask(self):
-        # Without a mask the noise is P_shot D^2 + S_bar V for intensity and
-        # P_shot D for cross, 0 at k_perp = 0, as before, if the Poisson noise
-        # is the same in every slice. If it changes along the LOS, the new
-        # model smooths it after the noise power a^2(x_par) is applied; the
-        # old one used its mean. The two differ by 3e-4 of P_shot here.
+        # Without a mask the exact noise is P_shot D^2 + S_bar V for intensity
+        # and P_shot D for cross, 0 at k_perp = 0 (a(x_par) times a white noise
+        # is white, with the power mean(a^2)), as before. The new model gives
+        # this if the Poisson noise is the same in every slice. If it changes
+        # along the LOS, the new model is off at second order in
+        # s_par * dln(a)/dx_par: by 3e-4 of P_shot here.
         for constant_a, rtol in [(True, 1e-5), (False, 1e-3)]:
             with self.subTest(constant_a=constant_a):
                 pk = power_model(N_mesh=16)

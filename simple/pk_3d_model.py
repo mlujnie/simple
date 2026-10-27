@@ -373,7 +373,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
           W a, as the signal is convolved with W w. This is exact for any W
           (also one that changes along the LOS) if a is the same in all
           slices, or if there is no LOS smoothing. Otherwise it assumes that a
-          changes little within the LOS smoothing length, like the signal.
+          changes little within the LOS smoothing length, like the signal;
+          the error is of second order in s_par * dln(a)/dx_par, also
+          without a mask, where the noise is exactly mean(a^2) D^2.
         - the pixel noise is not smoothed: white_noise_through_window with
           a^2 = (sigma_noise / mean intensity)^2 * voxel volume.
         """
