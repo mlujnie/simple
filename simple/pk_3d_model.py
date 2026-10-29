@@ -759,8 +759,11 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     def cross_shot_noise_per_slice(self):
         """
         Poisson noise of the cross power spectrum in each slice along the LOS,
-        without the mask, in (Mpc/h)^3: mean intensity / (mean intensity of the
-        box * mean galaxy density) of the galaxies that are in both maps.
+        without the mask, in (Mpc/h)^3: mean intensity of the galaxies that are
+        in both maps / (mean intensity of the box * mean galaxy density of the
+        galaxy map). The galaxy map is divided by its own mean density
+        (galaxy_selection["n_gal"]), which includes galaxies that are not in
+        the intensity map, e.g. for 'all' galaxies and 'detected' intensity.
 
         """
         galaxy_selections = self.galaxy_selection.values()
@@ -781,7 +784,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             / self.mean_intensity_per_redshift(
                 self.redshift_mesh_axis,
                 tracer="n_gal",
-                galaxy_selection=galaxy_selection,
+                galaxy_selection=self.galaxy_selection["n_gal"],
             )
         ).to(self.Mpch**3)
 
