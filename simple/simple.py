@@ -23,6 +23,7 @@ from simple.run_lognormal_galaxies import *
 from simple.tools_python import (
     transform_bin_to_h5,
     bin_scipy,
+    half_grid_weights,
     jinc,
     yaml_file_to_dictionary,
     make_map,
@@ -2860,7 +2861,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         pkspec : ndarray
             The power spectrum mesh to be binned.
         return_nmodes: bool
-            Set to true if you want to have the number of modes in each bin returned.
+            Set to true if you want to have the number of independent modes in
+            each bin returned (half the number of modes of the full FFT grid).
             Default: False.
 
         Returns
@@ -2879,10 +2881,18 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         muspec = np.concatenate(np.concatenate(self.muspec))
         pkspec = np.concatenate(np.concatenate(pkspec))
 
+        # weight each mode by the number of full-grid modes it stands for,
+        # so that the bin means are means over the full FFT grid
+        if np.shape(self.kspec)[2] == self.N_mesh[2]:  # full grid (dohalf=False)
+            weights = np.ones(np.shape(self.kspec))
+        else:  # rfft half grid
+            weights = half_grid_weights(self.N_mesh)
+        weights = np.concatenate(np.concatenate(weights))
+
         logging.info("Calculating summary statistics.")
         # (mean_k,monopole,quadrupole,(nmodes))
         return_tuple = bin_scipy(
-            pkspec, k_bins, kspec, muspec, return_nmodes=return_nmodes)
+            pkspec, k_bins, kspec, muspec, weights, return_nmodes=return_nmodes)
         return return_tuple
 
     def _get_prepared_intensity_mesh(self, sky_subtraction):

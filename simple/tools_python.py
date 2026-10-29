@@ -206,9 +206,45 @@ def get_checker_mask(N_mesh, N_cells=1):
     return obs_mask
 
 
-def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
+def half_grid_weights(N_mesh):
+    """
+    Number of modes of the full FFT grid that each mode of the rfft half grid
+    (k_z >= 0) stands for.
+
+    The power spectrum of a real field obeys P(-k) = P(k). A mode with
+    0 < k_z < k_Nyquist stands for itself and its partner -k, which the half
+    grid does not store, so it gets weight 2. On the k_z = 0 plane, and on the
+    k_z = k_Nyquist plane when N_mesh[2] is even, both k and -k are stored, so
+    each gets weight 1. Means with these weights equal means over the full grid.
+
+    Parameters
+    ----------
+    N_mesh : array-like
+        Number of cells along each axis.
+
+    Returns
+    -------
+    weights : ndarray
+        Array of shape (N_mesh[0], N_mesh[1], N_mesh[2] // 2 + 1).
+    """
+    nz = N_mesh[2]
+    weights = np.full(nz // 2 + 1, 2.0)
+    weights[0] = 1.0
+    if nz % 2 == 0:
+        weights[-1] = 1.0
+    return np.broadcast_to(weights, (N_mesh[0], N_mesh[1], nz // 2 + 1))
+
+
+def bin_scipy(pkspec, k_bins, kspec, muspec, weights, lmax=2, return_nmodes=False):
     """
     Calculates the monopole and quadrupole (if lmax==2) power spectrum and mean k in the given k bins.
+
+    Each bin value is a mean over the modes in the bin, weighted by `weights`,
+    the number of full-grid modes each input mode stands for (half_grid_weights
+    for the rfft half grid, 1 for the full grid). The result is then the mean
+    over the full FFT grid. Plain means over the half grid would count the
+    k_z = 0 and k_z = k_Nyquist planes twice as much, which gives an isotropic
+    field a nonzero quadrupole.
 
     Parameters
     ----------
@@ -223,10 +259,17 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
     muspec : array-like (1D)
         Array of mu values corresponding to pkspec.
         Flattened 3D array.
+    weights : array-like (1D)
+        Number of full-grid modes each value stands for.
+        Flattened 3D array.
     lmax : int, optional
         Maximum multipole moment to calculate. 
         Options: 1, 2
         Default: 2.
+    return_nmodes : bool, optional
+        Also return the number of independent modes in each bin, i.e. half the
+        number of full-grid modes, since k and -k carry the same power.
+        Default: False.
 
     Returns
     -------
@@ -238,29 +281,29 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
         Mean quadrupole power spectrum in each k bin.
     """
 
-    monopole, k_edge, bin_number = binned_statistic(
-        kspec, pkspec, bins=k_bins, statistic="mean"
-    )
+    # number of full-grid modes in each bin
+    n_full = binned_statistic(kspec, weights, bins=k_bins, statistic="sum")[0]
+
+    def mean(values):
+        # weighted mean of the values in each bin
+        total = binned_statistic(
+            kspec, weights * values, bins=k_bins, statistic="sum"
+        )[0]
+        with np.errstate(invalid="ignore"):  # empty bins give nan, as before
+            return total / n_full
+
+    monopole = mean(pkspec)
     logging.info("Calculated monopole.")
     if lmax == 2:
-        quadrupole, k_edge, bin_number = binned_statistic(
-            kspec,
-            pkspec * legendre(2)(muspec),
-            bins=k_bins,
-            statistic="mean",
-        )
+        quadrupole = mean(pkspec * legendre(2)(muspec))
         logging.info("Calculated quadrupole.")
     else:
         quadrupole = np.zeros(np.shape(monopole))
-    mean_k, k_edge, bin_number = binned_statistic(
-        kspec, kspec, bins=k_bins, statistic="mean"
-    )
+    mean_k = mean(kspec)
     logging.info("Calculated mean_k.")
 
     if return_nmodes:
-        nmodes, k_edge, bin_number = binned_statistic(
-            kspec, kspec, bins=k_bins, statistic='count')
-        return mean_k, monopole, 5 * quadrupole, nmodes
+        return mean_k, monopole, 5 * quadrupole, n_full / 2
     else:
         return (
             mean_k,
@@ -269,7 +312,7 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, lmax=2, return_nmodes=False):
         )
 
 
-def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
+def bin_Pk_2d(pkspec, k_bins, k_par, k_perp, weights):
     """
     Bins the power spectrum into a grid of given k_bins in the perpendicular and parallel to the LOS directions.
 
@@ -285,21 +328,28 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp):
         Flattened 3D array.
     k_perp: array-like (1D)
         Array of k_perpendicular values corresponding to pkspec.
+    weights: array-like (1D)
+        Number of full-grid modes each value stands for (see bin_scipy).
+        Flattened 3D array.
 
     Returns
     --------
     P_k_2d: array
-        Binned 2D power spectrum.
+        Binned 2D power spectrum (weighted mean in each bin).
 
     """
-    P_k_2d, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
-        k_par, k_perp, pkspec, bins=[k_bins, k_bins], statistic="mean"
-    )
+    def total(values):
+        # weighted sum of the values in each (k_par, k_perp) bin
+        return binned_statistic_2d(
+            k_par, k_perp, weights * values, bins=[k_bins, k_bins], statistic="sum"
+        )[0]
+    with np.errstate(invalid="ignore"):  # empty bins give nan, as before
+        P_k_2d = total(pkspec) / total(1.0)  # total(1.0): number of full-grid modes
     logging.info("Calculated P_k_2d.")
     return P_k_2d
 
 
-def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
+def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins, weights):
     """
     Bins the power spectrum into a grid of given k_bins and mu_bins.
 
@@ -317,6 +367,9 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
         Flattened 3D array.
     mu_bins: array-like
         Array specifying the bin edges for mu values.
+    weights: array-like (1D)
+        Number of full-grid modes each value stands for (see bin_scipy).
+        Flattened 3D array.
 
     Returns
     --------
@@ -329,17 +382,19 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins):
 
     """
 
-    P_k_mu, k_edge, mu_edge, bin_number_2d = binned_statistic_2d(
-        kspec, muspec, pkspec, bins=[k_bins, mu_bins], statistic="mean"
-    )
-    logging.info("Calculated P_k_mu.")
-    mean_k_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
-        kspec, muspec, kspec, bins=[k_bins, mu_bins], statistic="mean"
-    )
-    logging.info("Calculated mean k (2d).")
-    mean_mu_2d, k_edge, mu_edge, bin_number = binned_statistic_2d(
-        kspec, muspec, muspec, bins=[k_bins, mu_bins], statistic="mean"
-    )
+    def total(values):
+        # weighted sum of the values in each (k, mu) bin
+        return binned_statistic_2d(
+            kspec, muspec, weights * values, bins=[k_bins, mu_bins], statistic="sum"
+        )[0]
+    n_full = total(1.0)  # number of full-grid modes in each bin
+
+    with np.errstate(invalid="ignore"):  # empty bins give nan, as before
+        P_k_mu = total(pkspec) / n_full
+        logging.info("Calculated P_k_mu.")
+        mean_k_2d = total(kspec) / n_full
+        logging.info("Calculated mean k (2d).")
+        mean_mu_2d = total(muspec) / n_full
     logging.info("Calculated mean mu (2d).")
     return (mean_k_2d,
             mean_mu_2d,
