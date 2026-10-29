@@ -3,11 +3,12 @@ the rfft half grid (k_z >= 0)."""
 import unittest
 
 import numpy as np
-from scipy.stats import binned_statistic
+from scipy.stats import binned_statistic, binned_statistic_2d
 
 from simple.simple import LognormalIntensityMock
 from simple.tools import get_kspec_cython
-from simple.tools_python import bin_scipy, half_grid_weights, yaml_file_to_dictionary
+from simple.tools_python import (bin_scipy, bin_Pk_2d, bin_Pk_mu, half_grid_weights,
+                                 yaml_file_to_dictionary)
 
 
 def full_grid_power(nx, ny, nz, seed=1):
@@ -29,7 +30,9 @@ class TestHalfGridBinning(unittest.TestCase):
                             ((12, 10, 9), (300.0, 250.0, 225.0))]:
             nx, ny, nz = N_mesh
             k_full, mu_full = get_kspec_cython(nx, ny, nz, *box, dohalf=False)[:2]
+            k_par_full, k_perp_full = get_kspec_cython(nx, ny, nz, *box, dohalf=False)[6:]
             k_half, mu_half = get_kspec_cython(nx, ny, nz, *box, dohalf=True)[:2]
+            k_par_half, k_perp_half = get_kspec_cython(nx, ny, nz, *box, dohalf=True)[6:]
             P_full = full_grid_power(nx, ny, nz)
             P_half = P_full[:, :, : nz // 2 + 1]
             k_bins = np.linspace(0.0, np.max(k_half), 9)
@@ -51,6 +54,19 @@ class TestHalfGridBinning(unittest.TestCase):
                                       statistic="count")[0]
             np.testing.assert_allclose(ours[3], n_full / 2, rtol=1e-12)
 
+            # the same for the 2D binnings: P(k_par, k_perp), and P, k and mu in (k, mu) bins
+            w = half_grid_weights(N_mesh).ravel()
+            ours_2d = bin_Pk_2d(P_half.ravel(), k_bins, k_par_half.ravel(), k_perp_half.ravel(), w)
+            expected_2d = binned_statistic_2d(k_par_full.ravel(), k_perp_full.ravel(), P_full.ravel(),
+                                              bins=[k_bins, k_bins], statistic="mean")[0]
+            np.testing.assert_allclose(ours_2d, expected_2d, rtol=1e-12)
+            mu_bins = np.linspace(0.0, 1.0, 5)
+            ours_mu = bin_Pk_mu(P_half.ravel(), k_bins, k_half.ravel(), mu_half.ravel(), mu_bins, w)
+            for a, values in zip(ours_mu, [k_full, mu_full, P_full]):
+                b = binned_statistic_2d(k_full.ravel(), mu_full.ravel(), values.ravel(),
+                                        bins=[k_bins, mu_bins], statistic="mean")[0]
+                np.testing.assert_allclose(a, b, rtol=1e-12)
+
     def test_isotropic_field_has_no_quadrupole(self):
         # In a cubic box the x, y and z axes are equivalent, so the mean of
         # mu^2 = k_x^2 / k^2 over all modes in a bin is exactly 1/3, and the
@@ -65,6 +81,13 @@ class TestHalfGridBinning(unittest.TestCase):
         P = np.where(k > 0, k, 1.0) ** -1.5
         mean_k, monopole, quadrupole = lim.bin_scipy(P)
         np.testing.assert_allclose(quadrupole / monopole, 0.0, atol=1e-12)
+
+        # the full grid (dohalf=False) gives the same bins
+        lim.get_kspec(dohalf=False)
+        k = np.asarray(lim.kspec)
+        full = lim.bin_scipy(np.where(k > 0, k, 1.0) ** -1.5)
+        for a, b in zip(full, (mean_k, monopole, quadrupole)):
+            np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-12 * np.max(monopole))
 
 
 if __name__ == "__main__":

@@ -282,15 +282,13 @@ def bin_scipy(pkspec, k_bins, kspec, muspec, weights, lmax=2, return_nmodes=Fals
     """
 
     # number of full-grid modes in each bin
-    n_full, k_edge, bin_number = binned_statistic(
-        kspec, weights, bins=k_bins, statistic="sum"
-    )
+    n_full = binned_statistic(kspec, weights, bins=k_bins, statistic="sum")[0]
 
     def mean(values):
         # weighted mean of the values in each bin
-        total, k_edge, bin_number = binned_statistic(
+        total = binned_statistic(
             kspec, weights * values, bins=k_bins, statistic="sum"
-        )
+        )[0]
         with np.errstate(invalid="ignore"):  # empty bins give nan, as before
             return total / n_full
 
@@ -345,7 +343,8 @@ def bin_Pk_2d(pkspec, k_bins, k_par, k_perp, weights):
         return binned_statistic_2d(
             k_par, k_perp, weights * values, bins=[k_bins, k_bins], statistic="sum"
         )[0]
-    P_k_2d = total(pkspec) / total(1.0)  # total(1.0): number of full-grid modes
+    with np.errstate(invalid="ignore"):  # empty bins give nan, as before
+        P_k_2d = total(pkspec) / total(1.0)  # total(1.0): number of full-grid modes
     logging.info("Calculated P_k_2d.")
     return P_k_2d
 
@@ -390,11 +389,12 @@ def bin_Pk_mu(pkspec, k_bins, kspec, muspec, mu_bins, weights):
         )[0]
     n_full = total(1.0)  # number of full-grid modes in each bin
 
-    P_k_mu = total(pkspec) / n_full
-    logging.info("Calculated P_k_mu.")
-    mean_k_2d = total(kspec) / n_full
-    logging.info("Calculated mean k (2d).")
-    mean_mu_2d = total(muspec) / n_full
+    with np.errstate(invalid="ignore"):  # empty bins give nan, as before
+        P_k_mu = total(pkspec) / n_full
+        logging.info("Calculated P_k_mu.")
+        mean_k_2d = total(kspec) / n_full
+        logging.info("Calculated mean k (2d).")
+        mean_mu_2d = total(muspec) / n_full
     logging.info("Calculated mean mu (2d).")
     return (mean_k_2d,
             mean_mu_2d,
