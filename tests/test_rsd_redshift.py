@@ -67,6 +67,18 @@ class TestRSDRedshift(unittest.TestCase):
         np.testing.assert_allclose(
             np.asarray(lim.cat["RSD_redshift"]), expected, rtol=1e-12)
 
+    def test_single_redshift_slices(self):
+        # With single_redshift every galaxy is at the box's redshift, so every
+        # slice along the line of sight must be too, also after
+        # assign_single_redshift has run, and the mean intensity is the one at
+        # that redshift.
+        lim = mock_with_moving_galaxies(single_redshift=True)
+        lim.galaxy_selection = {"intensity": "all", "n_gal": "all"}
+        lim.assign_single_redshift()
+        np.testing.assert_array_equal(lim.redshift_mesh_axis, lim.redshift)
+        I_z = lim.mean_intensity_per_redshift(np.array([lim.redshift]))[0]
+        self.assertAlmostEqual((lim.mean_intensity / I_z).to_value(1), 1, places=12)
+
 
 if __name__ == "__main__":
     unittest.main()
