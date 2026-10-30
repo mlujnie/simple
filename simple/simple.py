@@ -11,7 +11,6 @@ import astropy.cosmology as astropy_cosmology
 import dask.array as da
 import h5py
 import numpy as np
-import pmesh
 import random
 
 from astropy.cosmology import Cosmology, z_at_value, FlatwCDM
@@ -1402,114 +1401,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             logging.info(
                 f"Saved instance to file {filename} and {catalog_filename}.")
             return
-
-    def _downsample_mesh(self, mesh, new_N_mesh):
-        """
-        Downsamples a given mesh to a new grid resolution using NGP.
-
-        Parameters
-        ----------
-        mesh : ndarray or astropy Quantity array
-            The input mesh to downsample.
-        new_N_mesh : list of int (len 3)
-            The new grid resolution for downsampling.
-
-        Returns
-        -------
-        ndarray or astropy Quantity array
-            The downsampled mesh.
-
-        """
-
-        try:
-            unit = mesh.unit
-        except:
-            unit = None
-        map = make_map(mesh.value, Nmesh=self.N_mesh,
-                       BoxSize=self.box_size.to_value(self.Mpch))
-        pm_down = pmesh.pm.ParticleMesh(new_N_mesh,
-                                        BoxSize=self.box_size.to_value(self.Mpch), dtype='float32', resampler="nearest")
-        map = pm_down.downsample(map, keep_mean=True)
-        if unit is not None:
-            map = (np.array(map) * unit).to(unit)
-        return map
-
-    def downsample_all_meshes(self, new_N_mesh):
-        """
-        Downsamples all meshes to a new grid resolution using NGP: 
-        n_gal_mesh, intensity_mesh, obs_mask, sky_intensity_mesh, noise_mesh.
-
-        Parameters
-        ----------
-        new_N_mesh : list of int (len 3)
-            The new grid resolution for downsampling.
-
-        """
-
-        assert isinstance(new_N_mesh[0], int)
-
-        logging.info("Downsampling all meshes...")
-        if self.n_gal_mesh is not None:
-            self.n_gal_mesh = self._downsample_mesh(
-                self.n_gal_mesh, new_N_mesh)
-            logging.info("Finished n_gal_mesh.")
-        if self.intensity_mesh is not None:
-            self.intensity_mesh = self._downsample_mesh(
-                self.intensity_mesh, new_N_mesh)
-            logging.info("Finished intensity_mesh.")
-        if self.obs_mask is not None:
-            self.obs_mask = self._downsample_mesh(self.obs_mask, new_N_mesh)
-            logging.info("Finished obs_mask.")
-        if self.sky_intensity_mesh is not None:
-            self.sky_intensity_mesh = self._downsample_mesh(
-                self.sky_intensity_mesh, new_N_mesh)
-            logging.info("Finished sky_intensity_mesh.")
-        if self.noise_mesh is not None:
-            self.noise_mesh = self._downsample_mesh(
-                self.noise_mesh, new_N_mesh)
-            logging.info("Finished noise_mesh.")
-
-        self.N_mesh = np.array(new_N_mesh)
-        self.voxel_size = (self.box_size / self.N_mesh).to(self.Mpch)
-
-        # The galaxy voxel indices refer to the old mesh and are invalid now.
-        cat = getattr(self, "cat", None)
-        if cat is not None:
-            for position, indices in (("Position", "realspace_indices"),
-                                      ("RSD_Position", "RSD_indices")):
-                if indices in cat:
-                    del cat[indices]
-                    if position in cat:
-                        self.get_galaxy_indices(position, indices)
-
-        try:
-            del self.redshift_mesh_axis
-        except:
-            pass
-        try:
-            del self.voxel_volume
-        except:
-            pass
-        try:
-            del self.k_Nyquist
-        except:
-            pass
-        try:
-            del self.mean_intensity_per_redshift_mesh
-        except:
-            pass
-        try:
-            del self.mean_ngal_per_redshift_mesh
-        except:
-            pass
-        try:
-            del self.mean_redshift
-        except:
-            pass
-        self.prepared_n_gal_mesh_ft = None
-        self.prepared_intensity_mesh_ft = None
-        self.prepared_skysub_intensity_mesh_ft = None
-        logging.info("Done.")
 
     @functools.cached_property
     def n_bar_gal(self):
