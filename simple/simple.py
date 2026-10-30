@@ -3038,6 +3038,36 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             quadrupole,
         )
 
+    def intensity_per_luminosity_density(self, redshifts):
+        r"""
+        The factor X_I(z) that turns a comoving luminosity density rho_L at
+        redshift z into the intensity of the map, I = X_I(z) rho_L
+        (paper Eqs. 4, 5 and 27, with the (1+z)^(-2) of the erratum for I_lambda):
+
+        .. math:: X_I^\lambda = \frac{c}{4 \pi \lambda_0 H(z) (1+z)^2},\quad
+                  X_I^\nu = \frac{c}{4 \pi \nu_0 H(z)},\quad
+                  X_T = \frac{c^3 (1+z)^2}{8 \pi k_B \nu_0^3 H(z)}
+
+        for I_lambda (lambda_restframe given), I_nu (nu_restframe given) or the
+        brightness temperature (brightness_temperature True, nu_0 = c / lambda_0
+        if lambda_restframe is given). I_lambda and I_nu are per steradian.
+        """
+        Hubble = self.astropy_cosmo.H(redshifts).to(u.km / u.s / u.Mpc)
+        if self.brightness_temperature:
+            if self.nu_restframe is None:
+                self.nu_restframe = (const.c / self.lambda_restframe).to(u.Hz)
+            return const.c**3 * (1 + redshifts) ** 2 / (
+                8 * np.pi * const.k_B * self.nu_restframe**3 * Hubble)
+        if self.lambda_restframe is not None:
+            logging.info("Applying correct (1+z)^(-2) factor to I_lambda.")
+            return const.c / (
+                4.0 * np.pi * self.lambda_restframe * Hubble * (1.0 * u.sr) * (1 + redshifts) ** 2)
+        if self.nu_restframe is not None:
+            return const.c / (4.0 * np.pi * self.nu_restframe * Hubble * (1.0 * u.sr))
+        raise ValueError(
+            "You must provide either lambda_restframe or nu_restframe to calculate the specific intensity dI/dnu or dI/dlambda."
+        )
+
     def luminosity_function_times_L(self, L):
         """ dn/dL * L"""
         return self.luminosity_function(L) * L
@@ -3181,37 +3211,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 "galaxy_selection must be either 'all' or 'detected' or 'undetected'."
             )
 
-        Hubble = self.astropy_cosmo.H(redshifts).to(u.km / u.s / u.Mpc)
+        mean_intensity_per_redshift = (
+            self.intensity_per_luminosity_density(redshifts) * mean_luminosity_density
+        )
         if self.brightness_temperature:
-            if self.nu_restframe is None:
-                self.nu_restframe = (const.c / self.lambda_restframe).to(u.Hz)
-            mean_intensity_per_redshift = (
-                (mean_luminosity_density)
-                * const.c**3
-                * (1 + redshifts) ** 2
-                / (8 * np.pi * const.k_B * self.nu_restframe**3 * Hubble)
-            ).to(u.uK)
-        else:
-            if self.lambda_restframe is not None:
-                rest_wave_or_freq = self.lambda_restframe
-                unit_wave_or_freq = self.lambda_restframe.unit
-            elif self.nu_restframe is not None:
-                rest_wave_or_freq = self.nu_restframe
-                unit_wave_or_freq = self.nu_restframe.unit
-            else:
-                raise ValueError(
-                    "You must provide either lambda_restframe or nu_restframe to calculate the specific intensity dI/dnu or dI/dlambda."
-                )
-
-            mean_intensity_per_redshift = (
-                const.c
-                / (4.0 * np.pi * rest_wave_or_freq * Hubble * (1.0 * u.sr))
-                * mean_luminosity_density
-            )
-            if self.lambda_restframe is not None:
-                logging.info("Applying correct (1+z)^(-2) factor to I_lambda.")
-                mean_intensity_per_redshift = mean_intensity_per_redshift / (1 + redshifts)**2
-
+            mean_intensity_per_redshift = mean_intensity_per_redshift.to(u.uK)
         return mean_intensity_per_redshift
 
     @functools.cached_property

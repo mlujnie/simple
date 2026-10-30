@@ -1,5 +1,7 @@
 import unittest
 
+import astropy.constants as const
+import astropy.units as u
 import numpy as np
 from astropy.table import Table
 from scipy.integrate import quad
@@ -54,6 +56,45 @@ class TestIntensityShotNoise(unittest.TestCase):
                 shot_noise.append(self.pk.get_intensity_shot_noise().value)
             self.assertGreater(shot_noise[0], 0)
             np.testing.assert_allclose(shot_noise[0], shot_noise[1], rtol=1e-4)
+
+
+class TestLineUnits(unittest.TestCase):
+    # The intensity can be I_lambda, I_nu or the brightness temperature T_b.
+    # For the same galaxies they are related by I_nu = I_lambda lambda_obs^2 / c
+    # (I_nu dnu = I_lambda dlambda) and T_b = c^2 I_nu / (2 k_B nu_obs^2)
+    # (Rayleigh-Jeans, per steradian), with lambda_obs = lambda_0 (1 + z).
+    # The mean intensity and the Poisson noise in physical units must follow.
+
+    LAMBDA_0 = 1215.67 * u.angstrom
+
+    def model(self, line, temperature):
+        input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+        input_dict["f_growth_filename"] = "./tests/input/example_fnu.txt"
+        input_dict["brightness_temperature"] = temperature
+        if line == "nu":
+            del input_dict["lambda_restframe"], input_dict["dlambda"]
+            input_dict["nu_restframe"] = (const.c / self.LAMBDA_0).to(u.GHz)
+            input_dict["dnu"] = 1 * u.MHz
+        return Power_Spectrum_Model(input_dict)
+
+    def test_mean_intensity_and_shot_noise(self):
+        pk = self.model("lambda", False)
+        z = pk.redshift_mesh_axis
+        lambda_obs = self.LAMBDA_0 * (1 + z)
+        to_I_nu = lambda_obs**2 / const.c
+        to_T_b = lambda_obs**4 / (2 * const.k_B * const.c) * u.sr
+        I = pk.mean_intensity_per_redshift(z)
+        # Poisson noise per slice in physical units (it is divided by the mean intensity^2)
+        P = pk.intensity_shot_noise_per_slice() * pk.mean_intensity**2
+        for line, temperature, factor, unit in [
+                ("nu", False, to_I_nu, u.erg / u.s / u.cm**2 / u.Hz / u.sr),
+                ("lambda", True, to_T_b, u.uK), ("nu", True, to_T_b, u.uK)]:
+            other = self.model(line, temperature)
+            np.testing.assert_allclose(other.mean_intensity_per_redshift(z).to_value(unit),
+                                       (I * factor).to_value(unit), rtol=1e-10)
+            P_other = other.intensity_shot_noise_per_slice() * other.mean_intensity**2
+            np.testing.assert_allclose(P_other.to_value(unit**2 * pk.Mpch**3),
+                                       (P * factor**2).to_value(unit**2 * pk.Mpch**3), rtol=1e-6)
 
 
 if __name__ == "__main__":
