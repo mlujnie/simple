@@ -394,8 +394,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         smoothed by the top-hat, so both noises are multiplied by
         sky_subtraction_factor() before the mask, which also removes k_perp = 0.
         The pixel noise is then convolved with the window W a like the Poisson
-        noise: exact if a is the same in every cell of the mask, otherwise it
-        assumes that a changes little within the top-hat radius s_perp_sky.
+        noise: exact if a is the same in all cells of each slice (it may change
+        along the LOS, since the top-hat only averages within a slice),
+        otherwise it assumes that a changes little within s_perp_sky.
         """
         removed = self.removed_modes("intensity")
         W = self.obs_mask * self.intensity_mask

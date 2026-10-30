@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 
 import astropy.units as u
@@ -240,6 +242,36 @@ class TestSkySubtraction(unittest.TestCase):
                             lambda unit: unit / c, sky_subtraction=True)
         model = pk.get_cross_noise(sky_subtraction=True).to_value(pk.Mpch**3)
         np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
+
+    def test_models(self):
+        # Without a mask the window depends only on the LOS position, so the
+        # sky-subtracted 3D models are the models without sky subtraction
+        # times (1 - D_sky)^2 (intensity) or 1 - D_sky (cross) in every mode.
+        # With do_model_shot_noise, the pixel noise S_bar V and the modelled
+        # Poisson noise get (1 - D_sky)^2 too.
+        pk = power_model(footprint_radius=72 * u.arcmin)
+        pk.out_filename = os.path.join(tempfile.mkdtemp(), "model.h5")
+        pk.do_model_shot_noise = True
+        pk.cross_shot_noise_model = 0 * pk.Mpch**3
+        kept = ~pk.removed_modes("intensity")
+        factor = pk.sky_subtraction_factor()
+
+        def model_3d(get_model, sky_subtraction, sigma=0.0, P_shot=0.0):
+            pk.sigma_noise = sigma * pk.mean_intensity
+            pk.im_shot_noise_model = P_shot * pk.Mpch**3
+            return np.asarray(get_model(sky_subtraction=sky_subtraction, return_3d=True)[0]).real
+
+        for get_model, power in [(pk.get_intensity_model, 2), (pk.get_cross_model, 1)]:
+            P, P_sky = model_3d(get_model, False), model_3d(get_model, True)
+            np.testing.assert_allclose(P_sky[kept], (factor**power * P)[kept],
+                                       rtol=1e-6, atol=1e-6 * np.max(np.abs(P)))
+
+        noise = (model_3d(pk.get_intensity_model, True, sigma=0.05, P_shot=300.0)
+                 - model_3d(pk.get_intensity_model, True))
+        D_sq = pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp)
+        S_bar_V = 0.05**2 * pk.voxel_volume.to_value(pk.Mpch**3)  # sigma^2 V_cell, no weights
+        expected = (S_bar_V + 300.0 * D_sq) * factor**2 * kept
+        np.testing.assert_allclose(noise, expected, rtol=1e-6, atol=1e-6 * np.max(expected))
 
 
 if __name__ == "__main__":
