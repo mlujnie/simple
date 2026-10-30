@@ -1,5 +1,6 @@
 import unittest
 
+import astropy.units as u
 import numpy as np
 
 from simple.pk_3d_model import Power_Spectrum_Model
@@ -7,10 +8,10 @@ from simple.simple import make_map
 from simple.tools_python import yaml_file_to_dictionary
 
 
-def power_model(N_mesh=8):
-    """A Power_Spectrum_Model of the test config on a small grid, with a
-    pixel noise of 0.05 times the mean intensity and the k grid."""
-    input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+def power_model(N_mesh=8, **settings):
+    """A Power_Spectrum_Model of the test config (changed by settings) on a
+    small grid, with a pixel noise of 0.05 times the mean intensity and the k grid."""
+    input_dict = dict(yaml_file_to_dictionary("./tests/test_lim_input.yaml"), **settings)
     # growth rate table, normally written by lognormal_galaxies when it runs
     input_dict["f_growth_filename"] = "./tests/input/example_fnu.txt"
     input_dict["N_mesh"] = [N_mesh] * 3
@@ -48,7 +49,8 @@ def smooth(pk, field, D):
                              type="complex").c2r())
 
 
-def exact_noise(pk, noise_power, intensity_response, galaxy_response=None):
+def exact_noise(pk, noise_power, intensity_response, galaxy_response=None,
+                sky_subtraction=False):
     """
     The expected V Re[d_1(k) d_2(k)^*] of a noise that is independent between
     cells, with the power noise_power (in (Mpc/h)^3) in each cell: the sum
@@ -57,7 +59,9 @@ def exact_noise(pk, noise_power, intensity_response, galaxy_response=None):
     the intensity mesh intensity_response(noise) times the mean intensity;
     d_2 is d_1, or galaxy_response(noise) times the mask, transformed as
     SIMPLE does. The response is computed for a noise of 1 and scaled, so
-    that the single-precision FFTs work with numbers of order 1.
+    that the single-precision FFTs work with numbers of order 1. With
+    sky_subtraction, d_1 is the sky-subtracted map; its sky estimate contains
+    the noise, as SIMPLE's does.
     """
     V = pk.box_size.to_value(pk.Mpch).prod()
     V_cell = V / np.prod(pk.N_mesh)
@@ -67,9 +71,9 @@ def exact_noise(pk, noise_power, intensity_response, galaxy_response=None):
         unit[i] = 1.0
         unit = unit.reshape(pk.N_mesh)
         pk.intensity_mesh = intensity_response(unit) * pk.mean_intensity
-        pk.prepared_intensity_mesh_ft = None
-        pk._get_prepared_intensity_mesh(sky_subtraction=False)
-        d_1 = np.array(pk.prepared_intensity_mesh_ft)
+        pk._get_prepared_intensity_mesh(sky_subtraction=sky_subtraction)
+        d_1 = np.array(pk.prepared_skysub_intensity_mesh_ft if sky_subtraction
+                       else pk.prepared_intensity_mesh_ft)
         if galaxy_response is None:
             d_2 = d_1
         else:
@@ -179,6 +183,64 @@ class TestNoiseThroughWindow(unittest.TestCase):
                 expected = pk.get_cross_shot_noise().to_value(pk.Mpch**3) * np.sqrt(D_sq) * kept
                 model = pk.get_cross_noise().to_value(pk.Mpch**3)
                 np.testing.assert_allclose(model, expected, rtol=1e-5, atol=1e-6 * np.max(expected))
+
+class TestSkySubtraction(unittest.TestCase):
+    # The sky subtraction subtracts the map smoothed with a top-hat of radius
+    # s_f perpendicular to the LOS, so it multiplies the map (signal and noise)
+    # by 1 - D_sky, D_sky = 2 J_1(k_perp s_f) / (k_perp s_f), before the mask
+    # (Eqs. 22-25 of the SIMPLE paper). A footprint of 72 arcmin (s_f = 80
+    # Mpc/h) makes D_sky < 0 for k_perp > 0.048 h/Mpc, inside the 8^3 grid.
+
+    def test_factor(self):
+        # Without a mask or noise, the sky-subtracted map of a random field is
+        # its map times sky_subtraction_factor() in every mode, with the sign.
+        pk = power_model(footprint_radius=72 * u.arcmin)
+        pk.noise_mesh = None
+        field = 1 + 0.1 * np.random.RandomState(3).normal(size=tuple(pk.N_mesh))
+        pk.intensity_mesh = field * pk.mean_intensity
+        pk._get_prepared_intensity_mesh(sky_subtraction=False)
+        pk._get_prepared_intensity_mesh(sky_subtraction=True)
+        d = np.array(pk.prepared_intensity_mesh_ft)
+        d_sky = np.array(pk.prepared_skysub_intensity_mesh_ft)
+        factor = pk.sky_subtraction_factor()
+        self.assertLess(np.min(factor), 1.0 - 0.05)  # 1 - D_sky < 1 ...
+        self.assertGreater(np.max(factor), 1.05)  # ... and > 1 where D_sky < 0
+        np.testing.assert_allclose(d_sky, factor * d, atol=1e-5 * np.max(np.abs(d)))
+
+    def test_noise(self):
+        # Pixel noise sigma, Poisson noise a^2 and cross noise c, each the
+        # same in every cell, through the sky subtraction and a mask that also
+        # changes along the LOS: the model is exact.
+        pk = power_model(footprint_radius=72 * u.arcmin)
+        pk.obs_mask = los_mask(pk)
+        pk.noise_mesh = None
+        pk.s_par, pk.s_perp = 40.0, 50.0  # Mpc/h
+        V_cell = pk.voxel_volume.to_value(pk.Mpch**3)
+        exact = exact_noise(pk, 0.05**2 * V_cell * np.ones(pk.N_mesh), lambda unit: unit,
+                            sky_subtraction=True)
+        model = (pk.get_intensity_noise(0.05 * pk.mean_intensity, sky_subtraction=True)
+                 - pk.get_intensity_noise(0 * pk.mean_intensity, sky_subtraction=True)
+                 ).to_value(pk.Mpch**3)
+        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
+
+        a2 = pk.intensity_shot_noise_per_slice()
+        a2_constant = np.mean(a2) * np.ones(len(a2))
+        pk.intensity_shot_noise_per_slice = lambda: a2_constant
+        D = np.sqrt(pk.D_sq_par_of_k(pk.k_par, pk.s_par) * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp))
+        exact = exact_noise(pk, a2_constant.to_value(pk.Mpch**3)[:, None, None] * np.ones(pk.N_mesh),
+                            lambda unit: smooth(pk, unit, D), sky_subtraction=True)
+        model = pk.get_intensity_noise(0 * pk.mean_intensity, sky_subtraction=True).to_value(pk.Mpch**3)
+        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
+
+        c = pk.cross_shot_noise_per_slice()
+        c_constant = np.mean(c) * np.ones(len(c))
+        pk.cross_shot_noise_per_slice = lambda: c_constant
+        c = c_constant.to_value(pk.Mpch**3)[:, None, None]
+        exact = exact_noise(pk, c**2 * np.ones(pk.N_mesh), lambda unit: smooth(pk, unit, D),
+                            lambda unit: unit / c, sky_subtraction=True)
+        model = pk.get_cross_noise(sky_subtraction=True).to_value(pk.Mpch**3)
+        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
+
 
 if __name__ == "__main__":
     unittest.main()

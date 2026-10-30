@@ -266,6 +266,17 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
         return (jinc(k_perp * s_perp_sky) * 2) ** 2
 
+    def sky_subtraction_factor(self):
+        """
+        The factor 1 - D_sky(k_perp) on the k grid by which the sky subtraction
+        multiplies the map (signal and noise), with D_sky = 2 J_1(k_perp s_f) / (k_perp s_f)
+        the top-hat of the sky estimate (Eqs. 22-25 of the SIMPLE paper; s_f = s_perp_sky).
+        P gets its square and the cross power the factor itself. D_sky < 0 where
+        3.83 < k_perp s_f < 7.02 (and in every second lobe after that), so
+        1 - D_sky is not 1 - sqrt(D_sky^2) there.
+        """
+        return 1 - 2 * jinc(np.asarray(self.k_perp) * self.s_perp_sky)
+
     @functools.cached_property
     def Pm_kspec(self):
         """
@@ -360,7 +371,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             2 * np.real(Wa2_hat * np.conj(W_hat)) - a2_perp * np.abs(W_hat)**2, axis=0)
         return np.mean(W**2 * a2) - correction * np.ones(np.shape(self.k_perp))
 
-    def get_intensity_noise(self, sigma_noise):
+    def get_intensity_noise(self, sigma_noise, sky_subtraction=False):
         """
         Noise power of the intensity map (divided by its mean) on the k grid,
         through the window, in (Mpc/h)^3. The estimator smooths the map, adds
@@ -378,18 +389,29 @@ class Power_Spectrum_Model(LognormalIntensityMock):
           without a mask, where the noise is exactly mean(a^2) D^2.
         - the pixel noise is not smoothed: white_noise_through_window with
           a^2 = (sigma_noise / mean intensity)^2 * voxel volume.
+
+        With sky_subtraction, the sky estimate is the map with its noise
+        smoothed by the top-hat, so both noises are multiplied by
+        sky_subtraction_factor() before the mask, which also removes k_perp = 0.
+        The pixel noise is then convolved with the window W a like the Poisson
+        noise: exact if a is the same in every cell of the mask, otherwise it
+        assumes that a changes little within the top-hat radius s_perp_sky.
         """
         removed = self.removed_modes("intensity")
         W = self.obs_mask * self.intensity_mask
         a_shot = np.sqrt(self.intensity_shot_noise_per_slice().to_value(self.Mpch**3))
         D_sq = self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp)
-        shot = self.convolve_window(np.where(removed, 0.0, D_sq), W * a_shot[:, None, None])
+        sky_sq = self.sky_subtraction_factor()**2 if sky_subtraction else 1.0
+        shot = self.convolve_window(np.where(removed, 0.0, D_sq * sky_sq), W * a_shot[:, None, None])
         a2_pixel = (
             (sigma_noise * self.weight_mesh_im)**2 * self.voxel_volume).to_value(self.Mpch**3)
-        pixel = self.white_noise_through_window(W, a2_pixel)
+        if sky_subtraction:
+            pixel = self.convolve_window(np.where(removed, 0.0, sky_sq), W * np.sqrt(a2_pixel))
+        else:
+            pixel = self.white_noise_through_window(W, a2_pixel)
         return (shot + pixel) * self.Mpch**3
 
-    def get_cross_noise(self):
+    def get_cross_noise(self, sky_subtraction=False):
         """
         Poisson noise power of the cross power spectrum on the k grid, through
         the windows, in (Mpc/h)^3. The intensity map is smoothed once (damping D,
@@ -398,11 +420,14 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         mask. As for the intensity (get_intensity_noise), D with k_perp = 0
         set to zero is convolved with the windows W_g and W_I c, which assumes
         that c changes little within the LOS smoothing length. The pixel noise
-        does not correlate with the galaxies.
+        does not correlate with the galaxies. With sky_subtraction, D is
+        multiplied by sky_subtraction_factor().
         """
         removed = self.removed_modes("cross")
         c = self.cross_shot_noise_per_slice().to_value(self.Mpch**3)
         D = np.sqrt(self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp))
+        if sky_subtraction:
+            D = D * self.sky_subtraction_factor()
         noise = self.convolve_window(
             np.where(removed, 0.0, D),
             self.obs_mask * self.galaxy_mask,
@@ -522,7 +547,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             tracer_units = {
                 "intensity" : str(self.mean_intensity**2 * self.Mpch**3),
                 "cross" : str(self.mean_intensity * self.Mpch**3),
-                "n_gal" : str(self.Mpch**3)
+                "n_gal" : str(self.Mpch**3),
+                "sky_subtracted_intensity" : str(self.mean_intensity**2 * self.Mpch**3),
+                "sky_subtracted_cross" : str(self.mean_intensity * self.Mpch**3),
             }
             with h5py.File(self.out_filename, "a") as ff:
                 if tracer in ff.keys():
@@ -860,12 +887,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             self.k_perp, self.s_perp
         )  # * self.D_cic_corr**2
         if sky_subtraction:
-            damping_function = damping_function * (
-                1
-                + self.D_sq_tophat_of_k(self.k_perp, self.s_perp_sky)
-                - 2 * np.sqrt(self.D_sq_tophat_of_k(self.k_perp,
-                              self.s_perp_sky))
-            )
+            # (1 - D_sky)^2, Eq. 24 of the SIMPLE paper
+            damping_function = damping_function * self.sky_subtraction_factor()**2
         mask_window_function = (
             self.obs_mask * self.intensity_mask
             * self.mean_intensity_per_redshift_mesh.to(self.mean_intensity)
@@ -878,11 +901,15 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             P_shot_smoothed = self.im_shot_noise_model
         else:
             P_shot_smoothed = self.get_intensity_shot_noise()
-            if not sky_subtraction:
-                # the noise through the window, after the k_perp = 0 modes are removed
-                noise = self.get_intensity_noise(sigma_noise_im)
+            # the noise through the window, after the k_perp = 0 modes are removed
+            noise = self.get_intensity_noise(sigma_noise_im, sky_subtraction)
         S_bar_im = self.get_S_bar(
             self.weight_mesh_im * self.intensity_mask * self.obs_mask, sigma_noise_im)
+        if self.do_model_shot_noise and sky_subtraction:
+            # the sky estimate contains the pixel noise, so S_bar V gets the factor too
+            # (added after the window, as get_3d_pk_model does without noise)
+            noise = (S_bar_im * self.box_volume * self.sky_subtraction_factor()**2
+                     + P_shot_smoothed * damping_function) * ~self.removed_modes("intensity")
         logging.info("\nS_bar intensity: {}\n".format(
             (S_bar_im * self.box_volume).to(self.Mpch**3)))
         observed_volume = self.get_observed_volume()
@@ -1006,13 +1033,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             * self.D_sq_perp_of_k(self.k_perp, self.s_perp)
         )  # self.D_cic_corr**2 *
         if sky_subtraction:
-            damping_function = damping_function * (
-                1 - np.sqrt(self.D_sq_tophat_of_k(self.k_perp, self.s_perp_sky))
-            )
+            # 1 - D_sky, Eq. 25 of the SIMPLE paper
+            damping_function = damping_function * self.sky_subtraction_factor()
         noise = None
-        if not (self.do_model_shot_noise or sky_subtraction):
+        if not self.do_model_shot_noise:
             # the noise through the windows, after the k_perp = 0 modes are removed
-            noise = self.get_cross_noise()
+            noise = self.get_cross_noise(sky_subtraction)
         observed_volume = self.get_observed_volume()
         if sky_subtraction:
             tracer = "sky_subtracted_cross"
