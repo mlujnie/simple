@@ -524,6 +524,8 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                 "cross" : str(self.mean_intensity * self.Mpch**3),
                 "n_gal" : str(self.Mpch**3)
             }
+            tracer_units["sky_subtracted_intensity"] = tracer_units["intensity"]
+            tracer_units["sky_subtracted_cross"] = tracer_units["cross"]
             with h5py.File(self.out_filename, "a") as ff:
                 if tracer in ff.keys():
                     del ff[tracer]

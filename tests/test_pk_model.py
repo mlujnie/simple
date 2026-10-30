@@ -1,6 +1,9 @@
+import os
+import tempfile
 import unittest
 
 import astropy.units as u
+import h5py
 import numpy as np
 
 from simple.pk_3d_model import Power_Spectrum_Model
@@ -75,6 +78,32 @@ class TestNgalNormalization(unittest.TestCase):
         lim._get_prepared_n_gal_mesh()
         prepared = np.asarray(lim.prepared_n_gal_mesh_ft.c2r())
         np.testing.assert_allclose(prepared, delta, atol=1e-6)
+
+
+class TestSkySubtractedModels(unittest.TestCase):
+
+    def test_get_models_saves_sky_subtracted(self):
+        # get_models() saves the sky-subtracted intensity and cross models,
+        # with the units of the intensity and cross models.
+        input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+        input_dict["f_growth_filename"] = "./tests/input/example_fnu.txt"
+        input_dict["run_pk"] = dict(input_dict["run_pk"], sky_subtracted_intensity=True,
+                                    sky_subtracted_cross=True)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_filename = os.path.join(tmp_dir, "model.h5")
+            pk = Power_Spectrum_Model(input_dict, do_model_shot_noise=False,
+                                      out_filename=out_filename)
+            pk.get_kspec()
+            pk.sigma_noise = 0 * pk.mean_intensity  # a table needs a noise mesh
+            pk.get_models()
+            with h5py.File(out_filename, "r") as ff:
+                for tracer in ["intensity", "cross"]:
+                    sky = ff["sky_subtracted_" + tracer]
+                    # finite in the same bins (bins beyond the grid's corner are empty)
+                    np.testing.assert_array_equal(np.isfinite(sky["monopole"][()]),
+                                                  np.isfinite(ff[tracer]["monopole"][()]))
+                    self.assertEqual(sky["monopole"].attrs["unit"],
+                                     ff[tracer]["monopole"].attrs["unit"])
 
 
 if __name__ == "__main__":
