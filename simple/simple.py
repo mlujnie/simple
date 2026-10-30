@@ -218,7 +218,10 @@ class BasicBoxCalculator:
 
     @functools.cached_property
     def redshift_mesh_axis(self):
-        """ Calculates the redshift coordinates along the LOS axis (cached)."""
+        """ Calculates the redshift coordinates along the LOS axis (cached).
+        With single_redshift, every slice has the redshift of the box."""
+        if self.single_redshift:
+            return np.full(self.N_mesh[0], float(self.redshift))
         distances = (
             self.minimum_distance
             + self.voxel_length[0] * (np.arange(self.N_mesh[0]) + 0.5)
@@ -1818,7 +1821,6 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         )
         self.cat["cosmo_redshift"] = self.redshift * \
             np.ones(len(self.cat['RSD_redshift_factor']))
-        self.delta_redshift = 0.0
         # with RSD: 1 + z_obs = (1 + z_cosmo) * (1 + v_LOS / c)
         self.cat["RSD_redshift"] = (
             (1 + self.cat["cosmo_redshift"]) * self.cat["RSD_redshift_factor"] - 1
