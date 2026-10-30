@@ -763,10 +763,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             integral = self.integrate_luminosity_function_times_Lsq(
                 int_L_min, int_L_max)
             rho_L_second_moment = integral * self.luminosity_unit**2 / u.Mpc**3
-            factor = const.c / (
-                4.0 * np.pi * self.lambda_restframe * (1.0 * u.sr) * (1 + redshift)**2
-            )
-            int_sec_mom = rho_L_second_moment * factor**2 / self.astropy_cosmo.H(redshift) ** 2
+            # I_lambda, I_nu or T_b per luminosity density, as for the mean intensity
+            factor = self.intensity_per_luminosity_density(redshift)
+            int_sec_mom = rho_L_second_moment * factor**2
             P_shot.append((int_sec_mom / self.mean_intensity**2).to(self.Mpch**3).value)
         return np.array(P_shot) * self.Mpch**3
 
