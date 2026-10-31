@@ -431,7 +431,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         Poisson noise power of the cross power spectrum on the k grid, through
         the windows, in (Mpc/h)^3. The intensity map is smoothed once (damping D,
-        the square root of D^2) and loses k_perp = 0 before the mask; the galaxy
+        D_of_k() with its sign) and loses k_perp = 0 before the mask; the galaxy
         map is not smoothed. c is the cross noise in each slice without the
         mask. As for the intensity (get_intensity_noise), D with k_perp = 0
         set to zero is convolved with the windows W_g and W_I c, which assumes
