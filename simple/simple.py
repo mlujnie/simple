@@ -2871,7 +2871,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         # Divide by the expected mean number density at each redshift (from the
         # luminosity function and the flux limit, also if min_flux is a mesh).
         # Dividing by the measured mean of each slice instead lowers P(k) by
-        # about twice the variance of the slice means.
+        # about twice the variance of the slice means (measured in simple-jax
+        # #49, not derived).
         galaxy_map = (self.n_gal_mesh / self.mean_ngal_per_redshift_mesh).to(1) - 1.
         galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
@@ -3157,9 +3158,10 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         If min_flux is a mesh with the same size as N_mesh and use_mesh_means
         is True, it will return the mean of each slice of the intensity/n_gal
         mesh depending on the specified tracer. With use_mesh_means False
-        (Power_Spectrum_Model, which has no painted meshes), it returns the
-        expected mean of each slice from the mesh and the selection_function
-        (see mean_selected_luminosity_moment); then redshifts must be
+        (Power_Spectrum_Model, which has no painted meshes, and the mock's
+        mean_ngal_per_redshift_mesh), it returns the expected mean of each
+        slice from the mesh and the selection_function (see
+        mean_selected_luminosity_moment); then redshifts must be
         redshift_mesh_axis.
 
         Parameters
@@ -3192,7 +3194,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         # if min_flux is a 3D array with the same shape as N_mesh,
         # return the mean intensity of the mesh as a function of LOS distance
-        # (the measured slice means; the model sets use_mesh_means=False).
+        # (the measured slice means; the model and mean_ngal_per_redshift_mesh
+        # set use_mesh_means=False).
         if self.min_flux_is_mesh and use_mesh_means:
             if tracer == "intensity":
                 mean_intensity_per_redshift = np.mean(
