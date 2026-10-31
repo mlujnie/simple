@@ -15,7 +15,7 @@ import random
 
 from astropy.cosmology import Cosmology, z_at_value, FlatwCDM
 from astropy.table import Table
-from scipy.integrate import quad
+from scipy.integrate import quad, cumulative_trapezoid
 from scipy.interpolate import interp1d
 
 from simple.run_lognormal_galaxies import *
@@ -801,8 +801,11 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             selfunc_table = Table.read(selection_function_fname, format="csv")
             detprob_by_fratio = interp1d(selfunc_table['flux_ratio'], selfunc_table['p'], fill_value=(0,1), bounds_error=False)
             self.selection_function = lambda fratio : np.random.binomial(n=np.ones(fratio.shape, dtype=int), p=detprob_by_fratio(fratio))
+            # p(flux / min_flux), kept for the expected means (mean_selected_luminosity_moment)
+            self.detection_probability = detprob_by_fratio
         else:
             self.selection_function = None
+            self.detection_probability = None
 
         if "limit_ngal" in input_dict.keys():
             self.limit_ngal = input_dict["limit_ngal"]
@@ -3072,8 +3075,66 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         """ dn/dL * L"""
         return self.luminosity_function(L) * L
 
+    @property
+    def min_flux_is_mesh(self):
+        """ Whether min_flux is a 3D mesh with the shape N_mesh (one flux limit per cell)."""
+        return (not callable(self.min_flux)) and np.shape(self.min_flux) == tuple(self.N_mesh)
+
+    def mean_selected_luminosity_moment(self, L_limits, galaxy_selection, m):
+        r"""
+        For a min_flux mesh: the integral of L^m dn/dL over the 'detected' or
+        'undetected' galaxies, averaged over the cells of a slice, in
+        Mpc^-3 luminosity_unit^m (m = 0: number density, m = 1: luminosity
+        density, m = 2: its second moment for the Poisson noise).
+
+        L_limits are the luminosity limits 4 pi D_L^2 min_flux of the cells, in
+        luminosity_unit. Without a selection_function, a galaxy is detected if
+        L > L_limit. With one, it is detected with probability p(L / L_limit).
+        That is the same as giving each galaxy its own threshold r_g, drawn with
+        the distribution function p, and detecting it if L > r_g L_limit,
+        because P(r_g < r) = p(r). So the moment is the average over r_g of the
+        integral for the hard limit r_g L_limit:
+
+        .. math:: \int dL\, L^m \frac{dn}{dL}\, p(L / L_\mathrm{lim})
+                  = \sum_g w_g \int_{r_g L_\mathrm{lim}}^{L_\mathrm{max}} dL\, L^m \frac{dn}{dL}
+
+        with r_g the middles of 3000 equal steps over the range of the table of
+        p, w_g the change of p over each step, plus the jumps of p at the ends
+        of the table (p is 0 below it and 1 above it), so the w_g sum to 1.
+        No galaxy is drawn outside [Lmin, Lmax], so a limit below Lmin detects
+        all galaxies and one above Lmax none.
+
+        """
+        L_min = self.Lmin.to(self.luminosity_unit).value
+        L_max = self.Lmax.to(self.luminosity_unit).value
+        # running integral of L^m dn/dL from Lmin, so that the integral from
+        # any L to Lmax is running[-1] minus its value at L
+        Ls = np.logspace(np.log10(L_min), np.log10(L_max), 100001)
+        running = cumulative_trapezoid(self.luminosity_function(Ls) * Ls**m, Ls, initial=0)
+        # thresholds r_g and their weights w_g
+        if self.detection_probability is None:
+            r_g, w_g = np.ones(1), np.ones(1)
+        else:
+            table_r = self.detection_probability.x
+            r = np.linspace(table_r[0], table_r[-1], 3001)
+            p = self.detection_probability(r)
+            r_g = np.r_[r[0], (r[1:] + r[:-1]) / 2, r[-1]]
+            w_g = np.r_[p[0], np.diff(p), 1 - p[-1]]
+        # cells with the same limit (e.g. a mesh that is constant across the
+        # slice) are computed once and counted
+        L_limits, counts = np.unique(L_limits, return_counts=True)
+        # integral from r_g L_limit to Lmax for each cell and threshold,
+        # averaged over the thresholds (weights w_g) and the cells; np.interp
+        # keeps the running integral constant below Lmin and above Lmax
+        L_low = np.outer(L_limits, r_g)
+        above = running[-1] - np.interp(np.log(L_low), np.log(Ls), running)
+        detected = np.average(above @ w_g, weights=counts)
+        if galaxy_selection == "detected":
+            return detected
+        return running[-1] - detected  # undetected: all galaxies minus the detected ones
+
     def mean_intensity_per_redshift(
-        self, redshifts, galaxy_selection="all", tracer="intensity"
+        self, redshifts, galaxy_selection="all", tracer="intensity", use_mesh_means=True
     ):
         r"""
         Calculates the mean intensity or the mean galaxy number density that we would expect
@@ -3094,8 +3155,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         ``Lmax = self.Lmax`` for all galaxies or detected galaxies
         ``Lmax = self.min_flux(z) * 4 * np.pi * D_L**2`` for undetected galaxies.
 
-        If min_flux is a mesh with the same size as N_mesh, 
-        it will return the mean of the intensity/n_gal mesh depending on the specified tracer.
+        If min_flux is a mesh with the same size as N_mesh and use_mesh_means
+        is True, it will return the mean of each slice of the intensity/n_gal
+        mesh depending on the specified tracer. With use_mesh_means False
+        (Power_Spectrum_Model, which has no painted meshes), it returns the
+        expected mean of each slice from the mesh and the selection_function
+        (see mean_selected_luminosity_moment); then redshifts must be
+        redshift_mesh_axis.
 
         Parameters
         ----------
@@ -3106,6 +3172,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         tracer: str
             Whether to calculate the mean intensity ('intensity') or mean galaxy number density ('n_gal').
             Default: 'intensity'.
+        use_mesh_means: bool
+            If min_flux is a mesh: whether to return the measured slice means of
+            the painted meshes (True) or the expected ones (False). Default: True.
 
         Returns
         -------
@@ -3124,20 +3193,19 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         # if min_flux is a 3D array with the same shape as N_mesh,
         # return the mean intensity of the mesh as a function of LOS distance
-        # because we can't make this calculation for each cell.
-        if (not callable(self.min_flux)) and (np.size(self.min_flux) > 1):
-            if (np.array(np.shape(self.min_flux)) == self.N_mesh).all():
-                if tracer == "intensity":
-                    mean_intensity_per_redshift = np.mean(
-                        self.intensity_mesh, axis=(1, 2))
-                elif tracer == 'n_gal':
-                    mean_intensity_per_redshift = np.mean(
-                        self.n_gal_mesh, axis=(1, 2))
-                else:
-                    raise ValueError(
-                        "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
-                    )
-                return mean_intensity_per_redshift
+        # (the measured slice means; the model sets use_mesh_means=False).
+        if self.min_flux_is_mesh and use_mesh_means:
+            if tracer == "intensity":
+                mean_intensity_per_redshift = np.mean(
+                    self.intensity_mesh, axis=(1, 2))
+            elif tracer == 'n_gal':
+                mean_intensity_per_redshift = np.mean(
+                    self.n_gal_mesh, axis=(1, 2))
+            else:
+                raise ValueError(
+                    "Invalid 'tracer' argument: must be either 'intensity' or 'n_gal'."
+                )
+            return mean_intensity_per_redshift
 
         if (galaxy_selection == "all") or (self.min_flux is None):
             if tracer == "intensity":
@@ -3163,9 +3231,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
         elif (galaxy_selection == "detected") or (galaxy_selection == "undetected"):
             mean_luminosity_density = []
-            for redshift in redshifts:
+            if self.min_flux_is_mesh:
+                assert len(redshifts) == self.N_mesh[0]  # one redshift per slice
+            for i, redshift in enumerate(redshifts):
                 if callable(self.min_flux):
                     F_min = self.min_flux(redshift)
+                elif self.min_flux_is_mesh:
+                    F_min = self.min_flux[i]  # the cells of slice i
                 else:
                     F_min = self.min_flux
                 int_L_limit = (
@@ -3175,6 +3247,13 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                     * self.astropy_cosmo.luminosity_distance(redshift) ** 2
                 )
                 int_L_limit = int_L_limit.to(self.luminosity_unit)
+                if self.min_flux_is_mesh:
+                    # mean over the cells of the slice, with the selection_function
+                    m = 1 if tracer == "intensity" else 0
+                    mean_luminosity_density.append(self.mean_selected_luminosity_moment(
+                        int_L_limit.value, galaxy_selection, m))
+                    mean_luminosity_density_unit = u.Mpc ** (-3) * self.luminosity_unit**m
+                    continue
                 if galaxy_selection == "detected":
                     int_L_min = int_L_limit.value
                     int_L_max = self.Lmax.to(self.luminosity_unit).value
