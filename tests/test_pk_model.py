@@ -54,10 +54,10 @@ class TestModelRemovedModes(unittest.TestCase):
         self.assert_model(model, expected, np.asarray(pk.kspec) == 0)
 
     def test_n_gal_with_min_flux_mesh(self):
-        # With a min_flux mesh the galaxy field is divided by the measured mean
-        # of each slice, which removes k_perp = 0 as for intensity.
+        # With a min_flux mesh too the galaxy field is divided by the expected
+        # mean density, so it loses only k = 0.
         pk, model, expected = model_3d("n_gal", min_flux_mesh=True)
-        self.assert_model(model, expected, np.asarray(pk.k_perp) == 0)
+        self.assert_model(model, expected, np.asarray(pk.kspec) == 0)
 
 
 class TestNgalNormalization(unittest.TestCase):
@@ -75,6 +75,23 @@ class TestNgalNormalization(unittest.TestCase):
         lim._get_prepared_n_gal_mesh()
         prepared = np.asarray(lim.prepared_n_gal_mesh_ft.c2r())
         np.testing.assert_allclose(prepared, delta, atol=1e-6)
+
+    def test_min_flux_mesh(self):
+        # With a min_flux mesh the galaxy field is divided by the expected mean
+        # density of each slice too: a mesh holding the table's flux limit at
+        # each slice centre gives the table's n_bar, and a wave along the line
+        # of sight survives.
+        table = LognormalIntensityMock("./tests/test_lim_input.yaml")
+        lim = LognormalIntensityMock("./tests/test_lim_input.yaml")
+        z = lim.redshift_mesh_axis
+        lim.min_flux = table.min_flux(z)[:, None, None] * np.ones(lim.N_mesh)
+        expected = table.mean_intensity_per_redshift(z, lim.galaxy_selection["n_gal"], "n_gal")
+        np.testing.assert_allclose(lim.mean_ngal_per_redshift_mesh[:, 0, 0], expected, rtol=1e-5)
+        n = lim.N_mesh[0]
+        delta = 0.1 * np.cos(2 * np.pi * np.arange(n) / n)[:, None, None] * np.ones(lim.N_mesh)
+        lim.n_gal_mesh = lim.mean_ngal_per_redshift_mesh * (1 + delta)
+        lim._get_prepared_n_gal_mesh()
+        np.testing.assert_allclose(np.asarray(lim.prepared_n_gal_mesh_ft.c2r()), delta, atol=1e-6)
 
 
 if __name__ == "__main__":

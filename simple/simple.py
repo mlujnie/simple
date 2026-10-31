@@ -2869,10 +2869,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             galaxy_map = self.n_gal_mesh
 
         # Divide by the expected mean number density at each redshift (from the
-        # luminosity function and the flux limit). Dividing by the measured mean
-        # of each slice instead lowers P(k) by about twice the variance of the
-        # slice means. If min_flux is a mesh, mean_ngal_per_redshift_mesh is the
-        # measured mean of each slice.
+        # luminosity function and the flux limit, also if min_flux is a mesh).
+        # Dividing by the measured mean of each slice instead lowers P(k) by
+        # about twice the variance of the slice means.
         galaxy_map = (self.n_gal_mesh / self.mean_ngal_per_redshift_mesh).to(1) - 1.
         galaxy_map[~np.isfinite(galaxy_map)] = 0.0
         galaxy_map_to_use = make_map(galaxy_map,
@@ -3308,11 +3307,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
 
     @functools.cached_property
     def mean_ngal_per_redshift_mesh(self):
-        """ Broadcasts the 1D mean_n_gal_per_redshift array to the 3D mesh (cached)."""
+        """ Broadcasts the 1D array of the expected mean galaxy density per
+        redshift to the 3D mesh (cached). For a min_flux mesh it is the expected
+        mean of each slice too, not the measured one."""
         return self.mean_intensity_per_redshift(
             self.redshift_mesh_axis,
             tracer="n_gal",
             galaxy_selection=self.galaxy_selection["n_gal"],
+            use_mesh_means=False,
         )[:, None, None]
 
     def get_galaxy_indices(self, position, indices):

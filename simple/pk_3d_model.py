@@ -329,10 +329,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         The modes (True on the k grid) that the estimators remove. The
         intensity estimator subtracts the mean of each slice along the LOS, so
         intensity and cross have no power at k_perp = 0. The galaxy field is
-        divided by the expected mean density and only loses k = 0, unless
-        min_flux is a mesh: then it loses k_perp = 0 as well.
+        divided by the expected mean density (also for a min_flux mesh) and
+        only loses k = 0.
         """
-        if tracer == "n_gal" and not self.min_flux_is_mesh:
+        if tracer == "n_gal":
             return np.asarray(self.kspec) == 0
         return np.asarray(self.k_perp) == 0
 
