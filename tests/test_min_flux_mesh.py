@@ -188,9 +188,9 @@ class TestModelRuns(unittest.TestCase):
     # not look up the cells of its catalog.
 
     def test_get_model(self):
-        # A mesh holding the table's flux limits gives the table's intensity
-        # and cross models (the n_gal model differs: with a mesh it also loses
-        # k_perp = 0). With the selection_function, the models are finite.
+        # A mesh holding the table's flux limits gives the table's intensity,
+        # n_gal and cross models. With the selection_function, the models are
+        # finite.
         def models(**kwargs):
             pk = model(galaxy_selection={"intensity": "detected", "n_gal": "detected"}, **kwargs)
             pk.sigma_noise = 0 * pk.mean_intensity  # no pixel noise, so no noise_mesh is needed
@@ -203,9 +203,8 @@ class TestModelRuns(unittest.TestCase):
         for tracer in ["intensity", "n_gal", "cross"]:
             filled = np.isfinite(table[tracer])  # bins with modes
             self.assertTrue(np.all(np.isfinite(probabilistic[tracer][filled])))
-            if tracer != "n_gal":
-                np.testing.assert_allclose(hard[tracer][filled], table[tracer][filled],
-                                           rtol=1e-5, atol=1e-5 * np.max(np.abs(table[tracer][filled])))
+            np.testing.assert_allclose(hard[tracer][filled], table[tracer][filled],
+                                       rtol=1e-5, atol=1e-5 * np.max(np.abs(table[tracer][filled])))
 
     def test_model_shot_noise(self):
         pk = model(min_flux_mesh=table_mesh, selection_function=SELECTION_FUNCTION,
