@@ -17,6 +17,7 @@ from astropy.cosmology import Cosmology, z_at_value, FlatwCDM
 from astropy.table import Table
 from scipy.integrate import quad, cumulative_trapezoid
 from scipy.interpolate import interp1d
+from scipy.optimize import brentq
 
 from simple.run_lognormal_galaxies import *
 from simple.tools_python import (
@@ -480,6 +481,10 @@ class LognormalIntensityMock(BasicBoxCalculator):
             -  unit of 'limit_ngal': unit of the 'limit_ngal' column (automatic if saved using astropy.table).
         In this case it will interpolate between redshifts (in case a redshift is out of bounds,
         the border values are used.)
+        For a number, the flux limit S_lim is the root of mean_z n(>4 pi D_L(z)^2 S_lim) = limit_ngal,
+        with n(>L) the density of galaxies brighter than L and the mean over the slice centres
+        redshift_mesh_axis. For a function, S_lim(z) solves n(>4 pi D_L(z)^2 S_lim(z)) = limit_ngal(z)
+        at 100 redshifts and is interpolated linearly in between. See apply_selection_function.
         Default: None. Then all galaxies are detected unless min_flux is given.
         Will be ignored if min_flux is given.
 
@@ -2078,49 +2083,32 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 self.cat["detected"] = np.array(self.cat["flux"] > min_flux)
 
         elif self.limit_ngal is not None:  # if instead limit_ngal was given as an input
-            min_L_for_interpolation = self.Lmin.to(self.luminosity_unit).value
-            max_L_for_interpolation = self.Lmax.to(self.luminosity_unit).value
-            if not np.isfinite(max_L_for_interpolation):
-                max_L_for_interpolation = (
-                    (1000 * self.Lmin).to(self.luminosity_unit).value
-                )
-            Ls = np.logspace(
-                np.log10(min_L_for_interpolation),
-                np.log10(max_L_for_interpolation),
-                1000,
-            )
-            n_gal_of_Lmin = [
-                np.trapz(self.luminosity_function(Ls[i:]), Ls[i:])
-                for i in range(len(Ls))
-            ]
-            interp_n_gal_of_Lmin = interp1d(n_gal_of_Lmin, Ls)
+            # n(>L), the number density of galaxies brighter than L: the integral
+            # of dn/dL from L to Lmax. It is computed once, as a running integral
+            # (trapezoid rule) on 100001 log-spaced L from Lmin to Lmax, and
+            # interpolated linearly in log L in between (relative error ~1e-8).
+            # np.interp keeps it constant outside [Lmin, Lmax]: all galaxies
+            # below Lmin, none above Lmax.
+            Ls = np.logspace(np.log10(self.Lmin.to_value(self.luminosity_unit)),
+                             np.log10(self.Lmax.to_value(self.luminosity_unit)), 100001)
+            running = cumulative_trapezoid(self.luminosity_function(Ls), Ls, initial=0)
+            log_Ls, n_above = np.log(Ls), running[-1] - running
+            flux_unit = 1e-17 * u.erg / u.s / u.cm**2
             if callable(self.limit_ngal):
+                # a flux limit S_lim(z) such that n(>4 pi D_L(z)^2 S_lim(z)) = limit_ngal(z),
+                # tabulated at 100 redshifts and interpolated linearly in between
                 redshifts = np.linspace(
                     self.redshift - self.delta_redshift - 0.01,
                     self.redshift + self.delta_redshift + 0.1,
                     100,
                 )
-                min_flux_det = []
-                flux_unit = 1e-17 * u.erg / u.s / u.cm**2
-                for i in range(len(redshifts)):
-                    goal_nbar = self.limit_ngal(redshifts[i])
-                    min_lum_det = (
-                        interp_n_gal_of_Lmin(goal_nbar.to(u.Mpc ** (-3)).value)
-                        * self.luminosity_unit
-                    )
-                    min_flux_det.append(
-                        (
-                            min_lum_det
-                            / (
-                                4
-                                * np.pi
-                                * self.astropy_cosmo.luminosity_distance(redshifts[i])
-                                ** 2
-                            )
-                        )
-                        .to(flux_unit)
-                        .value
-                    )
+                goal_nbar = u.Quantity([self.limit_ngal(z) for z in redshifts]).to_value(u.Mpc**-3)
+                if np.any(goal_nbar > n_above[0]):
+                    raise ValueError("limit_ngal is larger than the density of all galaxies.")
+                # L_lim(z): invert n(>L), which falls with L (so both arrays are reversed)
+                min_lum_det = np.exp(np.interp(goal_nbar, n_above[::-1], log_Ls[::-1])) * self.luminosity_unit
+                min_flux_det = (min_lum_det / (4 * np.pi * self.astropy_cosmo.luminosity_distance(redshifts) ** 2)
+                                ).to_value(flux_unit)
                 # min_flux returns a flux with units, like a min_flux table does
                 interp_min_flux_det = interp1d(redshifts, min_flux_det)
                 self.min_flux = lambda z: interp_min_flux_det(z) * flux_unit
@@ -2132,56 +2120,26 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 )
 
             else:
-                min_lum_det = (
-                    interp_n_gal_of_Lmin(
-                        self.limit_ngal.to(u.Mpc ** (-3)).value)
-                    * self.luminosity_unit
-                )
-                mean_dL_sq_inv = np.mean(
-                    self.astropy_cosmo.luminosity_distance(
-                        self.redshift_mesh_axis)
-                    ** (-2)
-                )
-                first_min_flux = min_lum_det / (4 * np.pi) * mean_dL_sq_inv
-                first_min_flux = first_min_flux.to(
-                    1e-17 * u.erg / u.s / u.cm**2)
+                # one flux limit S_lim for the whole box, such that the mean of
+                # n(>4 pi D_L^2 S_lim) over the slice centres is limit_ngal.
+                # log_L_per_S: log of the luminosity limit (in luminosity_unit)
+                # of a flux limit of 1 flux_unit, at each slice centre
+                log_L_per_S = np.log((4 * np.pi * self.astropy_cosmo.luminosity_distance(
+                    self.redshift_mesh_axis) ** 2 * flux_unit).to_value(self.luminosity_unit))
+                goal_nbar = self.limit_ngal.to_value(u.Mpc**-3)
+                if goal_nbar > n_above[0]:
+                    raise ValueError("limit_ngal is larger than the density of all galaxies.")
 
-                logging.info("Getting min_flux_of_nbar")
-                min_fluxes_for_interpolation = np.linspace(
-                    0.8 * first_min_flux, 1.2 * first_min_flux, 20
-                )
-                n_bars = []
-                i = 0
-                N = len(min_fluxes_for_interpolation)
-                redshift_mesh_axis = self.redshift_mesh_axis
-                for mf in min_fluxes_for_interpolation:
-                    Ls_of_z = [np.logspace( np.log10((  mf
-                                                        * 4
-                                                        * np.pi
-                                                        * self.astropy_cosmo.luminosity_distance(z) ** 2
-                                                        ).to(self.luminosity_unit).value), 
-                                            np.log10(max_L_for_interpolation), 1000) for z in redshift_mesh_axis]
-                    n_bar = np.mean(
-                        [
-                            np.trapz(
-                                self.luminosity_function(Ls_of_z[i]), Ls_of_z[i])
-                            for i in range(len(redshift_mesh_axis))
-                        ]
-                    )
-                    n_bars.append(n_bar)
-                    i += 1
-                logging.info(
-                    "Min/max n_bar: {:e} {:e}".format(min(n_bars), max(n_bars))
-                )
-                min_flux_of_nbar = interp1d(
-                    n_bars, min_fluxes_for_interpolation)
-                self.min_flux = (
-                    min_flux_of_nbar(self.limit_ngal.to(1 / u.Mpc**3).value)
-                    * 1e-17
-                    * u.erg
-                    / u.s
-                    / u.cm**2
-                )
+                def mean_n_minus_goal(log_S):  # log_S = log(S / flux_unit)
+                    return np.mean(np.interp(log_S + log_L_per_S, log_Ls, n_above)) - goal_nbar
+
+                # The mean falls with S: it is the density of all galaxies when the
+                # limit is below Lmin in every slice, and 0 when it is above Lmax
+                # in every slice. brentq finds the root in between.
+                log_S = brentq(mean_n_minus_goal,
+                               log_Ls[0] - log_L_per_S.max(), log_Ls[-1] - log_L_per_S.min(),
+                               xtol=1e-12)
+                self.min_flux = np.exp(log_S) * 1e-17 * u.erg / u.s / u.cm**2
                 self.cat["detected"] = np.array(
                     self.cat["flux"] > self.min_flux)
             logging.info("Realized detected n_gal: {:e}".format(
