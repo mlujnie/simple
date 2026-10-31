@@ -1,7 +1,7 @@
 import numpy as np
 import astropy.units as u
 import astropy.constants as const
-from astropy.table import Table
+from astropy.table import QTable, Table
 from scipy.interpolate import interp1d
 import functools
 import logging
@@ -332,8 +332,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         divided by the expected mean density and only loses k = 0, unless
         min_flux is a mesh: then it loses k_perp = 0 as well.
         """
-        min_flux_is_mesh = np.shape(self.min_flux) == tuple(self.N_mesh)
-        if tracer == "n_gal" and not min_flux_is_mesh:
+        if tracer == "n_gal" and not self.min_flux_is_mesh:
             return np.asarray(self.kspec) == 0
         return np.asarray(self.k_perp) == 0
 
@@ -617,7 +616,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         intensity_shot_noise_delta_k_sqs = []
         n_gal_shot_noise_delta_k_sqs = []
         cross_shot_noise_delta_k_sqs = []
-        catalog = Table()
+        # a QTable, so that columns with units are Quantities (with to_value),
+        # as in the mock's catalog; apply_selection_function needs that for a min_flux mesh
+        catalog = QTable()
         catalog["detected"] = np.ones(N_gal, dtype=bool)
         # catalog['RSD_Position'] = catalog['Position']
         catalog["RSD_redshift_factor"] = np.ones(N_gal, dtype=int)
@@ -759,10 +760,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         int_L_min = self.Lmin.to(self.luminosity_unit).value
         int_L_max = self.Lmax.to(self.luminosity_unit).value
         P_shot = []
-        for redshift in self.redshift_mesh_axis:
+        for i, redshift in enumerate(self.redshift_mesh_axis):
             if selection in ["detected", "undetected"]:
                 if callable(self.min_flux):
                     F_min = self.min_flux(redshift)
+                elif self.min_flux_is_mesh:
+                    F_min = self.min_flux[i]  # the cells of slice i
                 else:
                     F_min = self.min_flux
                 int_L_limit = (
@@ -775,8 +778,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                     int_L_min = int_L_limit
                 else:
                     int_L_max = int_L_limit
-            integral = self.integrate_luminosity_function_times_Lsq(
-                int_L_min, int_L_max)
+            if selection in ["detected", "undetected"] and self.min_flux_is_mesh:
+                # mean over the cells of the slice, with the selection_function
+                integral = self.mean_selected_luminosity_moment(int_L_limit, selection, 2)
+            else:
+                integral = self.integrate_luminosity_function_times_Lsq(
+                    int_L_min, int_L_max)
             rho_L_second_moment = integral * self.luminosity_unit**2 / u.Mpc**3
             # I_lambda, I_nu or T_b per luminosity density, as for the mean intensity
             factor = self.intensity_per_luminosity_density(redshift)
@@ -842,6 +849,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         mask = np.mean(self.obs_mask**2 * self.intensity_mask * self.galaxy_mask, axis=(1, 2))
         return np.mean(self.cross_shot_noise_per_slice() * mask)
+
+    def mean_intensity_per_redshift(self, redshifts, galaxy_selection="all", tracer="intensity"):
+        """ As LognormalIntensityMock.mean_intensity_per_redshift, but the expected
+        mean also if min_flux is a mesh: the model has no painted meshes to measure."""
+        return super().mean_intensity_per_redshift(
+            redshifts, galaxy_selection=galaxy_selection, tracer=tracer, use_mesh_means=False)
 
     @functools.cached_property
     def mean_intensity_per_redshift_mesh(self):
