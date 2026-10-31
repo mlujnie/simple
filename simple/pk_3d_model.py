@@ -238,6 +238,21 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         D_sq_perp = np.exp(-(k_perp**2) * s_perp**2)
         return D_sq_perp
 
+    def D_of_k(self):
+        """
+        Damping D (not squared) of the smoothed intensity map on the k grid:
+        the filter with which the map is smoothed (aniso_filter or
+        aniso_filter_gaussian in simple.py), with its sign. The cross power
+        gets D once. The sinc of the top-hat is negative where
+        2 pi < k_par s_par < 4 pi (and in every second lobe after that), so
+        there D is not sqrt(D_sq_par_of_k * D_sq_perp_of_k).
+        """
+        if self.do_spectral_tophat_smooth:
+            D_par = np.sinc(0.5 * self.k_par * self.s_par / np.pi)
+        else:
+            D_par = np.exp(-0.5 * self.k_par**2 * self.s_par**2)
+        return D_par * np.exp(-0.5 * self.k_perp**2 * self.s_perp**2)
+
     def D_cic_of_k(self, k, k_N):
         """
         Damping function D for cic resampling with the aliasing correction for the shot noise.
@@ -416,7 +431,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         Poisson noise power of the cross power spectrum on the k grid, through
         the windows, in (Mpc/h)^3. The intensity map is smoothed once (damping D,
-        the square root of D^2) and loses k_perp = 0 before the mask; the galaxy
+        D_of_k() with its sign) and loses k_perp = 0 before the mask; the galaxy
         map is not smoothed. c is the cross noise in each slice without the
         mask. As for the intensity (get_intensity_noise), D with k_perp = 0
         set to zero is convolved with the windows W_g and W_I c, which assumes
@@ -426,7 +441,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         """
         removed = self.removed_modes("cross")
         c = self.cross_shot_noise_per_slice().to_value(self.Mpch**3)
-        D = np.sqrt(self.D_sq_par_of_k(self.k_par, self.s_par) * self.D_sq_perp_of_k(self.k_perp, self.s_perp))
+        D = self.D_of_k()
         if sky_subtraction:
             D = D * self.sky_subtraction_factor()
         noise = self.convolve_window(
@@ -1028,10 +1043,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         logging.info("Cross shot noise: {}".format(
             P_shot_cross.to(self.Mpch**3)))
         # self.n_bar_gal
-        damping_function = np.sqrt(
-            self.D_sq_par_of_k(self.k_par, self.s_par)
-            * self.D_sq_perp_of_k(self.k_perp, self.s_perp)
-        )  # self.D_cic_corr**2 *
+        damping_function = self.D_of_k()  # the signed D, see D_of_k
         if sky_subtraction:
             # 1 - D_sky, Eq. 25 of the SIMPLE paper
             damping_function = damping_function * self.sky_subtraction_factor()
