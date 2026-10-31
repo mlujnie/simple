@@ -98,12 +98,12 @@ class TestLimitNgal(unittest.TestCase):
     def test_limit_ngal_above_all_galaxies_raises(self):
         # no flux limit gives more galaxies than all of them: a ValueError, not a silent limit
         too_many = "1 / u.Mpc**3"
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, "larger than the density"):
             mock_with_selection(too_many)
         with tempfile.TemporaryDirectory() as tmp_dir:
             filename = os.path.join(tmp_dir, "limit_ngal.ecsv")
             QTable({"redshift": [1.5, 3.5], "limit_ngal": [1, 1] / u.Mpc**3}).write(filename, format="ascii.ecsv")
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, "larger than the density"):
                 mock_with_selection(filename)
 
     def test_save_and_load_with_limit_ngal_table(self):

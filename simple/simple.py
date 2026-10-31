@@ -2086,7 +2086,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             # n(>L), the number density of galaxies brighter than L: the integral
             # of dn/dL from L to Lmax. It is computed once, as a running integral
             # (trapezoid rule) on 100001 log-spaced L from Lmin to Lmax, and
-            # interpolated linearly in log L in between (relative error ~1e-8).
+            # interpolated linearly in log L in between (relative error ~1e-7 or better).
             # np.interp keeps it constant outside [Lmin, Lmax]: all galaxies
             # below Lmin, none above Lmax.
             Ls = np.logspace(np.log10(self.Lmin.to_value(self.luminosity_unit)),
