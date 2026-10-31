@@ -6,6 +6,7 @@ import astropy.units as u
 import numpy as np
 
 from simple.pk_3d_model import Power_Spectrum_Model
+import simple.simple as simple_module
 from simple.simple import make_map
 from simple.tools_python import yaml_file_to_dictionary
 
@@ -49,6 +50,17 @@ def smooth(pk, field, D):
                                                BoxSize=pk.box_size.to_value(pk.Mpch)).r2c()) * D,
                              Nmesh=pk.N_mesh, BoxSize=pk.box_size.to_value(pk.Mpch),
                              type="complex").c2r())
+
+
+def smoothing_filter(pk):
+    """The filter with which SIMPLE smooths the intensity map (aniso_filter or
+    aniso_filter_gaussian in simple.py, with the LOS along axis 0) on the k grid."""
+    simple_module.sigma = np.array([pk.s_par, pk.s_perp, pk.s_perp])  # set as in SIMPLE
+    filter_function = (simple_module.aniso_filter if pk.do_spectral_tophat_smooth
+                       else simple_module.aniso_filter_gaussian)
+    ones = make_map(np.ones(np.shape(pk.k_par), dtype=complex), Nmesh=pk.N_mesh,
+                    BoxSize=pk.box_size.to_value(pk.Mpch), type="complex")
+    return np.array(ones.apply(filter_function, kind="wavenumber")).real
 
 
 def exact_noise(pk, noise_power, intensity_response, galaxy_response=None,
@@ -272,6 +284,56 @@ class TestSkySubtraction(unittest.TestCase):
         S_bar_V = 0.05**2 * pk.voxel_volume.to_value(pk.Mpch**3)  # sigma^2 V_cell, no weights
         expected = (S_bar_V + 300.0 * D_sq) * factor**2 * kept
         np.testing.assert_allclose(noise, expected, rtol=1e-6, atol=1e-6 * np.max(expected))
+
+
+class TestTopHatSign(unittest.TestCase):
+    # With the top-hat along the LOS, SIMPLE smooths the map with
+    # D = sinc(k_par s_par / 2) exp(-k_perp^2 s_perp^2 / 2), which is negative
+    # where 2 pi < k_par s_par < 4 pi. The cross power gets this D with its
+    # sign, the intensity power D^2. On the 8^3 grid (cells of 64 Mpc/h,
+    # k_N = 0.049 h/Mpc), s_par = 200 Mpc/h makes D < 0 for k_par >= 3/4 k_N.
+
+    def setUp(self):
+        self.pk = power_model(do_spectral_tophat_smooth=True)
+        self.pk.s_par, self.pk.s_perp = 200.0, 50.0  # Mpc/h
+        self.D = smoothing_filter(self.pk)
+        self.assertLess(np.min(self.D), -0.05)
+
+    def test_damping(self):
+        # D_of_k is SIMPLE's filter, and D_sq_par_of_k * D_sq_perp_of_k its square.
+        pk = self.pk
+        np.testing.assert_allclose(pk.D_of_k(), self.D, atol=1e-6)
+        np.testing.assert_allclose(pk.D_sq_par_of_k(pk.k_par, pk.s_par)
+                                   * pk.D_sq_perp_of_k(pk.k_perp, pk.s_perp), self.D**2, atol=1e-6)
+
+    def test_cross_noise(self):
+        # As TestNoiseThroughWindow.test_cross_noise with a constant c, with
+        # the intensity map smoothed by SIMPLE's filter: the model is exact.
+        pk = self.pk
+        pk.obs_mask = los_mask(pk)
+        c = pk.cross_shot_noise_per_slice()
+        c_constant = np.mean(c) * np.ones(len(c))
+        pk.cross_shot_noise_per_slice = lambda: c_constant
+        c = c_constant.to_value(pk.Mpch**3)[:, None, None]
+        exact = exact_noise(pk, c**2 * np.ones(pk.N_mesh), lambda unit: smooth(pk, unit, self.D),
+                            lambda unit: unit / c)
+        model = pk.get_cross_noise().to_value(pk.Mpch**3)
+        np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
+
+    def test_cross_model(self):
+        # With windows that are 1 everywhere (no mask, the same mean intensity
+        # in every slice), the 3D cross model, signal and modelled Poisson
+        # noise, is D times the model without smoothing.
+        pk = self.pk
+        pk.out_filename = os.path.join(tempfile.mkdtemp(), "model.h5")
+        pk.mean_intensity_per_redshift_mesh = np.ones(pk.N_mesh) * pk.mean_intensity
+        pk.do_model_shot_noise = True
+        pk.cross_shot_noise_model = 100.0 * pk.Mpch**3
+        model = np.asarray(pk.get_cross_model(return_3d=True)[0]).real
+        pk.s_par, pk.s_perp = 0.0, 0.0
+        unsmoothed = np.asarray(pk.get_cross_model(return_3d=True)[0]).real
+        np.testing.assert_allclose(model, self.D * unsmoothed, rtol=1e-6,
+                                   atol=1e-6 * np.max(np.abs(unsmoothed)))
 
 
 if __name__ == "__main__":
