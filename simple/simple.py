@@ -3083,8 +3083,8 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
     def mean_selected_luminosity_moment(self, L_limits, galaxy_selection, m):
         r"""
         For a min_flux mesh: the integral of L^m dn/dL over the 'detected' or
-        'undetected' galaxies, averaged over the cells of a slice, in
-        Mpc^-3 luminosity_unit^m (m = 0: number density, m = 1: luminosity
+        'undetected' galaxies, averaged over the cells of a slice (an
+        unweighted mean: the mask is not included), in Mpc^-3 luminosity_unit^m (m = 0: number density, m = 1: luminosity
         density, m = 2: its second moment for the Poisson noise).
 
         L_limits are the luminosity limits 4 pi D_L^2 min_flux of the cells, in

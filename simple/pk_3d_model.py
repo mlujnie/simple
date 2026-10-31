@@ -317,8 +317,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         divided by the expected mean density and only loses k = 0, unless
         min_flux is a mesh: then it loses k_perp = 0 as well.
         """
-        min_flux_is_mesh = np.shape(self.min_flux) == tuple(self.N_mesh)
-        if tracer == "n_gal" and not min_flux_is_mesh:
+        if tracer == "n_gal" and not self.min_flux_is_mesh:
             return np.asarray(self.kspec) == 0
         return np.asarray(self.k_perp) == 0
 

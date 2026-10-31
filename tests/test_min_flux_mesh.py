@@ -127,9 +127,9 @@ class TestSelectedLuminosityMoment(unittest.TestCase):
 class TestMockWithMesh(unittest.TestCase):
     # SIMPLE's own probabilistic selection on a uniform catalog: the number of
     # detected galaxies, the mean intensity and the intensity Poisson noise must
-    # be what the model expects. The mesh changes across the sky (a quarter of
-    # the cells has half the flux limit), so the cell lookup and the average
-    # over the cells are checked too.
+    # be what the model expects. The mesh changes across the sky (half of the
+    # cells, j < 8, have half the flux limit), so the cell lookup and the
+    # average over the cells are checked too.
 
     def test_counts_mean_and_noise(self):
         def min_flux(i, j, k):
@@ -169,13 +169,14 @@ class TestMockWithMesh(unittest.TestCase):
         error = np.sqrt(np.sum(L**2)) / np.sum(L)
         self.assertLess(abs(measured / pk.mean_intensity.value - 1), 5 * error)
 
-        # intensity power at k_perp != 0, which for a uniform catalog is only
-        # the Poisson noise, against the model's
+        # intensity power against the model's Poisson noise. The expected map
+        # (from the mesh and n_bar(z)) does not depend on the third index, so
+        # its pattern is in the modes with k_2 = 0; the modes with k_2 != 0
+        # (the last axis of the real FFT) hold only the Poisson noise
         pk._get_prepared_intensity_mesh(sky_subtraction=False)
         V = pk.box_volume.to_value(pk.Mpch**3)
         power = V * np.abs(np.array(pk.prepared_intensity_mesh_ft))**2
-        pk.get_kspec()
-        power = power[np.asarray(pk.k_perp) > 0]
+        power = power[:, :, 1:]
         # the map is divided by its measured box mean, the model by the expected one
         noise = pk.get_intensity_shot_noise().to_value(pk.Mpch**3) * (pk.mean_intensity.value / measured)**2
         self.assertLess(abs(np.mean(power) - noise), 5 * np.std(power) / np.sqrt(power.size))
