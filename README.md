@@ -37,3 +37,6 @@ See `environment.yaml`:
 
 ## Acknowledging SIMPLE
 If you have used the SIMPLE code in your work, please cite the paper ([arxiv:2307.08475](https://arxiv.org/abs/2307.08475), [ApJ 958 4](https://iopscience.iop.org/article/10.3847/1538-4357/acfef4)) or the DOI of the deposited code on Zenodo (http://doi.org/10.5281/zenodo.8319528).
+
+## License
+SIMPLE is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version (SPDX: `GPL-3.0-or-later`). It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [LICENSE](LICENSE) for the full text.

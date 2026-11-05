@@ -8,7 +8,7 @@ setup(
     url='https://github.com/mlujnie/simple',
     author='Maja Lujan Niemeyer',
     author_email='maja@mpa-garching.mpg.de',
-    license='???',
+    license='GPL-3.0-or-later',
     packages=['simple'],
     install_requires=['mpi4py>=2.0', # modify!!!
                       'numpy',                     
@@ -19,7 +19,7 @@ setup(
     classifiers=[
         'Development Status :: 1 - Planning',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: BSD License',  # change !!!
+        'License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)',
         'Operating System :: POSIX :: Linux',   # why do I have to specify this?
         'Programming Language :: Python :: 3.8.13',
     ],
