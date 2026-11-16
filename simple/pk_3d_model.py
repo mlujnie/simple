@@ -405,7 +405,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         W = u w. Otherwise W and a^2 are returned as they are.
         """
         W, a2 = mask_window_function, noise_power
-        if np.mean(W) == 0:  # everything masked: no power, from one slice too
+        if not np.any(W):  # everything masked: no power, from one slice too
             return W[:1], a2[:1]
         w = np.mean(W, axis=0, keepdims=True)
         u = np.mean(W, axis=(1, 2), keepdims=True) / np.mean(W)
