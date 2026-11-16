@@ -124,6 +124,13 @@ If your input version is a yaml file, the possible options for the ``cosmology``
 If your input is a dictionary, you can also define your astropy cosmology within python and use this cosmology in the dictionary.
 
 You will have to provide a value for the spectral index :math:`n_s` and for :math:`\ln(10^{10}A_s)` separately in the input dictionary or file because they are not part of astropy cosmology.
+:math:`A_s` is the amplitude of the primordial power spectrum at the pivot :math:`k = 0.05\,\mathrm{Mpc}^{-1}`, as Planck quotes it; it is used only if you give no ``input_pk_filename``.
+
+.. warning::
+   Up to version 1.0.1, SIMPLE gave ``lnAs`` unchanged to lognormal_galaxies' ``compute_pk``, which takes :math:`A_s` at :math:`k = 0.002\,\mathrm{Mpc}^{-1}`.
+   For the same ``lnAs``, the input power spectrum was then a factor :math:`(0.002/0.05)^{1-n_s}` smaller than it is now (0.892 for :math:`n_s = 0.9645`).
+   This includes the mocks of the SIMPLE paper (arXiv:2307.08475).
+   To reproduce a power spectrum made with the older versions, give ``lnAs`` :math:`+ (n_s - 1) \ln(0.002/0.05)`.
 
 Luminosity function
 ====================
