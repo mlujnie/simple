@@ -385,6 +385,100 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             2 * np.real(Wa2_hat * np.conj(W_hat)) - a2_perp * np.abs(W_hat)**2, axis=0)
         return np.mean(W**2 * a2) - correction * np.ones(np.shape(self.k_perp))
 
+    def los_factors(self, mask_window_function, noise_power):
+        """
+        The window W and the noise power a^2 (arrays of shape N_mesh) reduced
+        to one slice with the same noise power in sky_subtracted_white_noise,
+        if each of them is a profile along the LOS times a pattern on the sky
+        (the same pattern in every slice), W = u(x_par) w(x_perp) and
+        a^2 = g(x_par) s(x_perp): then slice i has u_i^2 g_i times the power
+        of a slice with the mask w and the noise s, so the mean over the
+        slices is that of the single slice (w, mean(u^2 g) s). Otherwise W
+        and a^2 are returned as they are. Here w and s are the means of W and
+        a^2 along the LOS, u = mean_perp(W) / mean(W) and
+        g = mean_perp(a^2) / mean(a^2). If W is the same in all cells of each
+        slice (for example without a mask), a^2 is first replaced by its mean
+        over each slice, which factorizes: for every cell y of a slice, the
+        sum over x in sky_subtracted_white_noise is then
+        W (1 - D_sky) e^{-ik.y}, with the same absolute value, so that only
+        the sum of a^2 over the slice enters.
+        """
+        W, a2 = mask_window_function, noise_power
+        if np.all(W == W[:, :1, :1]):
+            a2 = np.broadcast_to(np.mean(a2, axis=(1, 2), keepdims=True), a2.shape)
+        w, s = np.mean(W, axis=0, keepdims=True), np.mean(a2, axis=0, keepdims=True)
+        u, g = np.mean(W, axis=(1, 2), keepdims=True), np.mean(a2, axis=(1, 2), keepdims=True)
+        # W mean(W) = (u mean(W)) w and a2 mean(a2) = (g mean(a2)) s if they
+        # factorize (to 1e-6 of the largest value: the meshes can be float32)
+        for mesh, profile, pattern in ((W, u, w), (a2, g, s)):
+            product = profile * pattern
+            if not np.allclose(mesh * np.mean(mesh), product, rtol=0, atol=1e-6 * np.max(np.abs(product))):
+                return W, a2
+        if np.mean(W) == 0 or np.mean(a2) == 0:  # everything masked, or no noise
+            return w, s
+        return w, s * np.mean((u / np.mean(W))**2 * g / np.mean(a2))
+
+    def sky_subtracted_white_noise(self, mask_window_function, noise_power):
+        """
+        Power on the k grid of a noise that is white before the mask, with the
+        power noise_power (array, in (Mpc/h)^3) in each cell, after the sky
+        subtraction and the multiplication by the window W. The exact sum
+        over the cells, for any W and noise_power.
+
+        Derivation. Sums run over the N_c cells; d~(k) = sum_x d(x) e^{-ik.x}.
+        The noise is n(y) = sigma(y) e(y) in units of the mean intensity, with
+        <e(y) e(y')> = 1 for y = y' and 0 otherwise, and
+        a^2 = noise_power = sigma^2 V_cell. _get_prepared_intensity_mesh makes
+
+            d(x) = W(x) sum_y F(x - y) n(y),   F(r) = [r = 0] - T(r),
+
+        where T(r), the kernel of the sky average, is the inverse Fourier
+        transform of D_sky(k_perp) = 1 - sky_subtraction_factor().
+        D_sky(0) = 1, so n - T[n] has mean 0 in every slice, and subtracting
+        the slice mean changes nothing. Then
+
+            <|d~(k)|^2> = sum_y sigma^2(y) |sum_x W(x) F(x - y) e^{-ik.x}|^2,
+            N(k) = V <|d~(k)|^2> / N_c^2 = (1 / N_c) sum_y a^2(y) |...|^2.
+
+        D_sky does not depend on k_par, so F(r) is 0 unless r lies in one
+        slice: the sum over x runs over the slice of y only, and its absolute
+        value is that of the 2D Fourier transform of W(x) F(x - y) in that
+        slice, which does not depend on k_par. So N depends on k_perp only,
+        and is the mean over the slices of the sum over the cells y of a slice.
+
+        Cost: one 2D FFT of the mesh for each cell of a slice. If W and a^2
+        are each a profile along the LOS times a pattern on the sky
+        (los_factors), as for a sky mask with a noise sigma(z) / sqrt(N_IFU),
+        or if W is the same in all cells of each slice, one slice is enough
+        (measured for the same sum in simple-jax, in JAX on 4 CPU cores:
+        0.2 s for 64^3 and 70 s for 311^3 cells; not measured for this numpy
+        loop). Otherwise all slices are needed, which takes hours for a
+        311^3 mesh.
+
+        Without a mask (W = 1) the sum is mean(a^2) (1 - D_sky)^2, and for
+        the same a^2 in every cell it is a^2 times (1 - D_sky)^2 convolved
+        with W. Up to SIMPLE 25add5b the model was (1 - D_sky)^2 convolved
+        with W a for every a, which is this sum only if a is the same in all
+        cells of a slice.
+        """
+        n_y, n_z = self.N_mesh[1], self.N_mesh[2]
+        W = np.broadcast_to(np.asarray(mask_window_function, dtype=float), tuple(self.N_mesh))
+        a2 = np.broadcast_to(np.asarray(noise_power, dtype=float), tuple(self.N_mesh))
+        N = np.zeros((n_y, n_z // 2 + 1))
+        if np.any(a2):  # else no pixel noise
+            W, a2 = self.los_factors(W, a2)
+            # 1 - D_sky on numpy's k_perp grid of a slice (as np.fft.rfft2 below), and F(r)
+            l_y, l_z = self.box_size.to_value(self.Mpch)[1:]
+            k_y = 2 * np.pi * np.fft.fftfreq(n_y, d=l_y / n_y)[:, None]
+            k_z = 2 * np.pi * np.fft.rfftfreq(n_z, d=l_z / n_z)[None, :]
+            factor = 1 - 2 * jinc(np.sqrt(k_y**2 + k_z**2) * self.s_perp_sky)
+            F = np.fft.irfft2(factor, s=(n_y, n_z))
+            for j in range(n_y):
+                for l in range(n_z):  # the cells y = (j, l) of all slices
+                    G = np.fft.rfft2(W * np.roll(F, (j, l), axis=(0, 1)))  # of each slice: W(x) F(x - y)
+                    N += np.sum(a2[:, j, l, None, None] * np.abs(G)**2, axis=0)
+        return N / W.size * np.ones(np.shape(self.k_perp))
+
     def get_intensity_noise(self, sigma_noise, sky_subtraction=False):
         """
         Noise power of the intensity map (divided by its mean) on the k grid,
@@ -407,10 +501,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         With sky_subtraction, the sky estimate is the map with its noise
         smoothed by the top-hat, so both noises are multiplied by
         sky_subtraction_factor() before the mask, which also removes k_perp = 0.
-        The pixel noise is then convolved with the window W a like the Poisson
-        noise: exact if a is the same in all cells of each slice (it may change
-        along the LOS, since the top-hat only averages within a slice),
-        otherwise it assumes that a changes little within s_perp_sky.
+        The Poisson noise is then convolved with the window W a as before
+        (a is the same in all cells of a slice). The pixel noise, whose sigma
+        can change from cell to cell, is the exact sum of
+        sky_subtracted_white_noise.
         """
         removed = self.removed_modes("intensity")
         W = self.obs_mask * self.intensity_mask
@@ -421,7 +515,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         a2_pixel = (
             (sigma_noise * self.weight_mesh_im)**2 * self.voxel_volume).to_value(self.Mpch**3)
         if sky_subtraction:
-            pixel = self.convolve_window(np.where(removed, 0.0, sky_sq), W * np.sqrt(a2_pixel))
+            pixel = self.sky_subtracted_white_noise(W, a2_pixel)
         else:
             pixel = self.white_noise_through_window(W, a2_pixel)
         return (shot + pixel) * self.Mpch**3
