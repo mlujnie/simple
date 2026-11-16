@@ -256,29 +256,46 @@ class TestSkySubtraction(unittest.TestCase):
         np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(np.abs(exact)))
 
     def test_pixel_noise_sigma_mesh(self):
-        # Pixel noise with a sigma that changes from cell to cell, through the
-        # sky subtraction and a mask: the model is the exact sum over the cells
-        # (sky_subtracted_white_noise). Not factorized: a mask and a sigma that
-        # also change along the LOS, so that every slice is summed. Factorized:
-        # a sky mask and sigma^2 = a profile along the LOS times a pattern on
-        # the sky (sigma(z) / sqrt(N_IFU) with N_IFU = 1 to 4 per sky pixel),
-        # where one slice is summed (los_factors).
-        for factorized in (False, True):
-            with self.subTest(factorized=factorized):
+        # Pixel noise through the sky subtraction and a mask, for a sigma
+        # that changes from cell to cell: the model is exact
+        # (sky_subtracted_white_noise). The cases, with the number of slices
+        # that los_factors keeps and whether the model up to SIMPLE 25add5b,
+        # (1 - D_sky)^2 convolved with the window W sigma, is exact too:
+        # 3d_mask      mask and sigma change from cell to cell: every slice
+        #              is summed.
+        # sky_mask     mask = profile along the LOS times a pattern on the
+        #              sky, sigma changes from cell to cell and with the
+        #              profile: one slice is summed, with the noise power
+        #              mean over the slices of profile^2 sigma^2.
+        # los_mask     mask = a profile along the LOS only, sigma changes
+        #              from cell to cell: only the mean of sigma^2 over each
+        #              slice enters, and no cell is summed.
+        # sigma_of_z   3D mask, sigma the same in all cells of each slice:
+        #              the convolution, as up to SIMPLE 25add5b.
+        for case, slices, old_is_exact in [("3d_mask", 8, False), ("sky_mask", 1, False),
+                                           ("los_mask", 1, False), ("sigma_of_z", 8, True)]:
+            with self.subTest(case=case):
                 pk = power_model(footprint_radius=72 * u.arcmin)
                 pk.noise_mesh = None
                 n = tuple(pk.N_mesh)
                 rng = np.random.RandomState(4)
-                if factorized:
-                    pk.obs_mask = sky_mask(pk)
-                    sigma = (0.05 * rng.uniform(0.5, 1.5, (n[0], 1, 1))
-                             / np.sqrt(rng.randint(1, 5, (1, n[1], n[2]))))
-                else:
+                profile = rng.uniform(0.5, 1.5, (n[0], 1, 1))
+                N_IFU = rng.randint(1, 5, n)  # 1 to 4 in each cell
+                if case == "3d_mask":
                     pk.obs_mask = los_mask(pk)
                     observed = pk.obs_mask > 0
                     sigma = 0.05 / np.sqrt(np.where(observed, pk.obs_mask, 1.0)) * observed
-                slices = pk.los_factors(pk.obs_mask, sigma**2 * np.ones(n))[0].shape[0]
-                self.assertEqual(slices, 1 if factorized else n[0])
+                elif case == "sky_mask":
+                    pk.obs_mask = sky_mask(pk) * profile
+                    sigma = 0.05 * profile / np.sqrt(N_IFU)
+                elif case == "los_mask":
+                    pk.obs_mask = profile * np.ones(n)
+                    sigma = 0.05 * profile / np.sqrt(N_IFU)
+                else:
+                    pk.obs_mask = los_mask(pk)
+                    sigma = 0.05 * profile * np.ones(n)
+                kept_slices = pk.los_factors(pk.obs_mask, sigma**2 * np.ones(n))[0].shape[0]
+                self.assertEqual(kept_slices, slices)
                 V_cell = pk.voxel_volume.to_value(pk.Mpch**3)
                 exact = exact_noise(pk, sigma**2 * V_cell * np.ones(n), lambda unit: unit,
                                     sky_subtraction=True)
@@ -286,13 +303,14 @@ class TestSkySubtraction(unittest.TestCase):
                          - pk.get_intensity_noise(0 * pk.mean_intensity, sky_subtraction=True)
                          ).to_value(pk.Mpch**3)
                 np.testing.assert_allclose(model, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
-                # (1 - D_sky)^2 convolved with the window W sigma, the model up
-                # to SIMPLE 25add5b, is off by more than 3% of the largest
-                # value (6.3% and 5.6%, computed with numpy alone for these
-                # masks and sigmas with s_f = 80 Mpc/h)
+                # the model up to SIMPLE 25add5b is off by more than 3% of the
+                # largest value where sigma changes within a slice (6.2, 4.2 and 3.7%)
                 kept = np.where(pk.removed_modes("intensity"), 0.0, pk.sky_subtraction_factor()**2)
                 old = np.real(pk.convolve_window(kept, pk.obs_mask * sigma * np.sqrt(V_cell)))
-                self.assertGreater(np.max(np.abs(old - exact)) / np.max(exact), 0.03)
+                if old_is_exact:
+                    np.testing.assert_allclose(old, exact, rtol=1e-5, atol=1e-6 * np.max(exact))
+                else:
+                    self.assertGreater(np.max(np.abs(old - exact)) / np.max(exact), 0.03)
 
     def test_models(self):
         # Without a mask the window depends only on the LOS position, so the
