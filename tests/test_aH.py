@@ -1,8 +1,13 @@
+import contextlib
+import io
 import unittest
+from unittest import mock
 
+import astropy.units as u
 import numpy as np
 from astropy.cosmology import FlatwCDM, LambdaCDM, Planck18
 
+import simple.simple
 from simple.simple import LognormalIntensityMock
 from simple.tools_python import yaml_file_to_dictionary
 
@@ -28,27 +33,82 @@ COSMOLOGIES = {
 }
 
 
+# The same five cosmologies as SIMPLE can run them: run_lognormal_simulation_cpp
+# needs neutrino masses (m_nu), which astropy has only with Tcmb0 > 0, and
+# compute_pk needs Ob0. Each with (old aH) / (new aH) - 1 at the redshift of
+# tests/test_lim_input.yaml, z = 2.2245, in per cent.
+FULL = dict(H0=67.66, Om0=0.31, Ob0=0.049, Tcmb0=2.7255, m_nu=[0, 0, 0.06] * u.eV)
+RUNNABLE = {
+    "Planck18": (Planck18, -0.25),
+    "flat wCDM, w = -0.8": (FlatwCDM(w0=-0.8, **FULL), -3.25),
+    "flat wCDM, w = -1.2": (FlatwCDM(w0=-1.2, **FULL), +1.34),
+    "LambdaCDM, Ode0 = 0.64": (LambdaCDM(Ode0=0.64, **FULL), -2.45),
+    "LambdaCDM, Ode0 = 0.74": (LambdaCDM(Ode0=0.74, **FULL), +2.23),
+}
+
+
+class Stop(Exception):
+    pass
+
+
+def params_for_lognormal_galaxies(lim):
+    """The parameters that lim.run_lognormal_simulation_cpp() gives
+    lognormal_galaxies: the call is stopped at check_dir_im, the first step
+    after the parameters are set, so nothing is run or written."""
+    captured = {}
+
+    def stop(params):
+        captured.update(params)
+        raise Stop
+
+    with mock.patch.object(simple.simple, "check_dir_im", stop), contextlib.redirect_stdout(io.StringIO()):
+        try:
+            lim.run_lognormal_simulation_cpp()
+        except Stop:
+            pass
+    return captured
+
+
+def make_mock(cosmology):
+    input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+    input_dict["cosmology"] = cosmology
+    return LognormalIntensityMock(input_dict)
+
+
 class TestaH(unittest.TestCase):
     # aH, which lognormal_galaxies multiplies its displacements with to get
     # the velocities, must be a H(z) of the mock's cosmology in km/s per
     # Mpc/h: 100 E(z) / (1 + z), since H0 / h = 100 km/s/Mpc.
     #
     # The old formula, 100 sqrt(Om0 (1 + z)^3 + Ode0) / (1 + z), holds for
-    # flat LambdaCDM without radiation only. At z = 2.2245 it was 0.25 % too
-    # small for Planck18, 3.0 % too small for w = -0.8, 1.6 % too large for
-    # w = -1.2, 2.3 % too small for Omega_k = +0.05 and 2.4 % too large for
-    # Omega_k = -0.05, and the RSD displacement v (1 + z) / H(z) with it.
+    # flat LambdaCDM without radiation only.
 
-    def test_aH_is_a_H_of_the_cosmology(self):
+    def test_get_aH_is_a_H_of_the_cosmology(self):
+        # get_aH against E(z) written out by hand. Four of these five
+        # cosmologies have no radiation (Tcmb0 = 0), so that E(z) is short;
+        # SIMPLE cannot run lognormal_galaxies for them (astropy's m_nu is
+        # None without Tcmb0), which the next test does with RUNNABLE.
         for name, (cosmology, E) in COSMOLOGIES.items():
-            input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
-            input_dict["cosmology"] = cosmology
-            lim = LognormalIntensityMock(input_dict)
-            if E is None:
-                E = cosmology.efunc
-            z = lim.redshift
-            np.testing.assert_allclose(
-                lim.get_aH(), 100 * E(z) / (1 + z), rtol=1e-12, err_msg=name)
+            with self.subTest(cosmology=name):
+                lim = make_mock(cosmology)
+                if E is None:
+                    E = cosmology.efunc
+                z = lim.redshift
+                np.testing.assert_allclose(lim.get_aH(), 100 * E(z) / (1 + z), rtol=1e-12)
+
+    def test_aH_given_to_lognormal_galaxies(self):
+        # The aH that run_lognormal_simulation_cpp hands to lognormal_galaxies
+        # is astropy's H(z) / h / (1 + z) at the redshift of the box, and the
+        # old formula differs from it by the per cent in RUNNABLE.
+        for name, (cosmology, percent) in RUNNABLE.items():
+            with self.subTest(cosmology=name):
+                params = params_for_lognormal_galaxies(make_mock(cosmology))
+                z = params["z"]
+                H = cosmology.H(z).to_value(u.km / u.s / u.Mpc)
+                np.testing.assert_allclose(params["aH"], H / cosmology.h / (1 + z), rtol=1e-12)
+                self.assertIsInstance(params["aH"], float)  # it is printed into a command line
+                old = 100 * np.sqrt(cosmology.Om0 * (1 + z)**3 + cosmology.Ode0) / (1 + z)
+                np.testing.assert_allclose(100 * (old / params["aH"] - 1), percent, atol=0.005)
 
 
 if __name__ == "__main__":

@@ -1481,12 +1481,17 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         multiplies its displacements (in Mpc/h) by aH f(k) to get the
         velocities (in km/s).
 
-        H(z) comes from the astropy cosmology, so that it is the same H(z)
-        that assign_redshift_along_axis and assign_single_redshift use to move
-        the galaxies along the line of sight by v (1 + z) / H(z). It is in
-        km/s/Mpc; dividing by h gives km/s per Mpc/h. (Before, aH was
+        H(z) comes from the astropy cosmology, at the redshift of the box. It
+        is in km/s/Mpc; dividing by h gives km/s per Mpc/h.
+        assign_redshift_along_axis and assign_single_redshift then move each
+        galaxy along the line of sight by v (1 + z) / H(z), with astropy's
+        H(z) at the galaxy's own redshift (the redshift of the box for a
+        single redshift), which is the generator's displacement times f(k)
+        and aH(box) / aH(galaxy). (Before, aH was
         100 sqrt(Om0 (1 + z)^3 + Ode0) / (1 + z), which holds for flat
-        LambdaCDM without radiation and massive neutrinos only.)
+        LambdaCDM without radiation and massive neutrinos only.) The same aH
+        goes to lognormal_galaxies' calc_pk_const_los_ngp, which divides the
+        velocities by it again.
 
         Returns
         -------
