@@ -3091,6 +3091,22 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             return detected
         return running[-1] - detected  # undetected: all galaxies minus the detected ones
 
+    def clip_luminosity_limit(self, L_limit):
+        """
+        Clips the luminosity limit of a flux limit, 4 pi D_L^2 min_flux (a
+        number or an array, in luminosity_unit), to [Lmin, Lmax]. No galaxy is
+        drawn outside [Lmin, Lmax], so a limit below Lmin detects the same
+        galaxies as Lmin (all of them) and one above Lmax the same as Lmax
+        (none). Without the clipping, the integrals over the 'detected' and
+        'undetected' galaxies would include the luminosity function outside
+        [Lmin, Lmax], where the mock has no galaxies. Used for min_flux given
+        as a number or a function of redshift; for a min_flux mesh,
+        mean_selected_luminosity_moment does the same.
+
+        """
+        return np.clip(L_limit, self.Lmin.to(self.luminosity_unit).value,
+                       self.Lmax.to(self.luminosity_unit).value)
+
     def mean_intensity_per_redshift(
         self, redshifts, galaxy_selection="all", tracer="intensity", use_mesh_means=True
     ):
@@ -3112,6 +3128,9 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
         and
         ``Lmax = self.Lmax`` for all galaxies or detected galaxies
         ``Lmax = self.min_flux(z) * 4 * np.pi * D_L**2`` for undetected galaxies.
+        The limit ``self.min_flux(z) * 4 * np.pi * D_L**2`` is clipped to
+        ``[self.Lmin, self.Lmax]`` (clip_luminosity_limit): a flux limit below
+        the flux of ``Lmin`` detects all galaxies, one above that of ``Lmax`` none.
 
         If min_flux is a mesh with the same size as N_mesh and use_mesh_means
         is True, it will return the mean of each slice of the intensity/n_gal
@@ -3214,12 +3233,14 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                         int_L_limit.value, galaxy_selection, m))
                     mean_luminosity_density_unit = u.Mpc ** (-3) * self.luminosity_unit**m
                     continue
+                # the mock has galaxies from Lmin to Lmax only
+                L_limit = self.clip_luminosity_limit(int_L_limit.value)
                 if galaxy_selection == "detected":
-                    int_L_min = int_L_limit.value
+                    int_L_min = L_limit
                     int_L_max = self.Lmax.to(self.luminosity_unit).value
                 else:
                     int_L_min = self.Lmin.to(self.luminosity_unit).value
-                    int_L_max = int_L_limit.value
+                    int_L_max = L_limit
                 Ls = np.logspace(np.log10(int_L_min), np.log10(int_L_max), 10000)
                 if tracer == "intensity":
                     integrated = np.trapz(
