@@ -74,10 +74,10 @@ class TestAsPivot(unittest.TestCase):
         # has sigma8 within 1 % of 0.8102. The three numbers are those of
         # Planck Collaboration 2020, A&A 641, A6 (arXiv:1807.06209), Table 2,
         # column TT,TE,EE+lowE+lensing+BAO, which astropy names as the source
-        # of Planck18. With lnAs given unchanged to compute_pk, sigma8 is
-        # 0.7705, 4.9 % too low (measured with compute_pk of lognormal_galaxies
-        # bb7334c by the reviewer of SIMPLE #25, who also measured 0.8132
-        # with the conversion).
+        # of Planck18. Measured by the reviewer of SIMPLE #25 with compute_pk
+        # of lognormal_galaxies bb7334c: this test gives sigma8 = 0.8121
+        # (+0.23 %), and 0.7694 (5.0 % too low) with lnAs given unchanged to
+        # compute_pk.
         input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
         input_dict.update(cosmology="Planck18", n_s=0.9665, lnAs=3.047)
         params = params_for_lognormal_galaxies(LognormalIntensityMock(input_dict))
