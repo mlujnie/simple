@@ -8,14 +8,17 @@ from simple.tools_python import yaml_file_to_dictionary
 
 FLUX = u.erg / u.s / u.cm**2
 # Flux limits whose luminosity limit L_lim = 4 pi D_L^2 min_flux lies outside
-# [Lmin, Lmax], the luminosities the mock's galaxies have. With
-# tests/test_lim_input.yaml (z = 2.0 to 2.45, Lmin = 1e41 erg/s) a galaxy of
-# Lmin has a flux of 2.0e-18 (far side) to 3.3e-18 erg/s/cm^2 (near side), and
-# one of Lmax = 1e44 erg/s a flux 1000 times larger.
+# [Lmin, Lmax], the luminosities the mock's galaxies have. In the box of
+# tests/test_lim_input.yaml (slice centres from z = 1.957 to 2.488,
+# Lmin = 1e41 erg/s) a galaxy of Lmin has a flux of 1.94e-18 (far side) to
+# 3.48e-18 erg/s/cm^2 (near side), and one of Lmax = 1e43 erg/s a flux 100
+# times larger. Lmax = 1e43 erg/s is low enough that the luminosity function
+# above it matters: without the clipping, the Poisson noise of the undetected
+# galaxies with the limit ABOVE_LMAX would be 21 % too large.
 BELOW_LMIN = 1e-19 * FLUX  # every galaxy is detected
-ABOVE_LMAX = 1e-13 * FLUX  # no galaxy is detected (with Lmax = 1e44 erg/s)
-INSIDE = 3e-17 * FLUX
-LMAX = 1e44 * u.erg / u.s
+ABOVE_LMAX = 1e-13 * FLUX  # no galaxy is detected (with Lmax = 1e43 erg/s)
+INSIDE = 3e-17 * FLUX  # L_lim = 8.6e41 to 1.5e42 erg/s
+LMAX = 1e43 * u.erg / u.s
 
 
 def model(**changes):
@@ -75,19 +78,22 @@ class TestFluxLimitOutsideLuminosityRange(unittest.TestCase):
         # on the far side. n_bar of the detected galaxies in each slice must
         # be the integral of the luminosity function from max(L_lim, Lmin),
         # computed here on 10^5 luminosities.
+        # The limit is given as a number and as a function of z.
         pk = model()
         z = pk.redshift_mesh_axis
         D_L = pk.astropy_cosmo.luminosity_distance
-        pk.min_flux = (pk.Lmin / (4 * np.pi * D_L(pk.redshift) ** 2)).to(FLUX)
-        L_lim = (4 * np.pi * D_L(z) ** 2 * pk.min_flux).to_value(pk.luminosity_unit)
+        limit = (pk.Lmin / (4 * np.pi * D_L(pk.redshift) ** 2)).to(FLUX)
+        L_lim = (4 * np.pi * D_L(z) ** 2 * limit).to_value(pk.luminosity_unit)
         L_min, L_max = [L.to_value(pk.luminosity_unit) for L in (pk.Lmin, pk.Lmax)]
         self.assertTrue(np.sum(L_lim < L_min) >= 4 and np.sum(L_lim > L_min) >= 4)
         expected = []
         for L in L_lim:
             Ls = np.logspace(np.log10(max(L, L_min)), np.log10(L_max), 100000)
             expected.append(np.trapz(pk.luminosity_function(Ls), Ls))
-        n_det = means(pk, "detected")[1]
-        np.testing.assert_allclose(n_det.to_value(u.Mpc**-3), expected, rtol=1e-5)
+        for min_flux in [limit, lambda z: limit]:
+            pk.min_flux = min_flux
+            n_det = means(pk, "detected")[1]
+            np.testing.assert_allclose(n_det.to_value(u.Mpc**-3), expected, rtol=1e-5)
 
     def test_number_and_mesh_agree(self):
         # The same flux limit as a number and as a mesh (the same in every
@@ -115,6 +121,12 @@ class TestFluxLimitOutsideLuminosityRange(unittest.TestCase):
         # of the detected galaxies is that of all galaxies.
         pk = model(min_flux=BELOW_LMIN)
         np.testing.assert_allclose(shot_noise(pk, "detected"), shot_noise(pk, "all"), rtol=1e-12)
+
+    def test_shot_noise_with_limit_above_Lmax(self):
+        # No galaxy is detected, so the Poisson noise of the intensity map of
+        # the undetected galaxies is that of all galaxies.
+        pk = model(min_flux=ABOVE_LMAX, Lmax=LMAX)
+        np.testing.assert_allclose(shot_noise(pk, "undetected"), shot_noise(pk, "all"), rtol=1e-12)
 
 
 if __name__ == "__main__":
