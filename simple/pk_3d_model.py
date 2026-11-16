@@ -446,16 +446,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
         - W is the same in all cells of each slice (for example no mask).
           Then for a cell y of slice i the sum over x is
-          W_i (1 - D_sky) e^{-ik.y}, with the same absolute value for every
-          y of the slice, so only the sum of a^2 over the slice enters, and
-          a^2 is replaced by its mean over each slice.
+          W_i (1 - D_sky) e^{-ik.y}, with the absolute value squared
+          W_i^2 (1 - D_sky)^2 for every y of the slice, so
+          N = (1 / N_c) sum_y W^2(y) a^2(y) (1 - D_sky)^2
+          = mean(W^2 a^2) (1 - D_sky)^2.
         - a^2 is the same in all cells of each slice (sigma_noise a number
-          or a function of redshift; or after the step above). Then
-          n = a_i e in slice i and, since F acts within a slice,
-          d = (W a)(x) sum_y F(x - y) e(y): white noise of power 1 times
-          (1 - D_sky)^2, multiplied by the window W a. So N is (1 - D_sky)^2
-          convolved with the window W a (convolve_window), the model up to
-          SIMPLE 25add5b, which used it for every a.
+          or a function of redshift). Then n = a_i e in slice i and, since F
+          acts within a slice, d = (W a)(x) sum_y F(x - y) e(y): white noise
+          of power 1 times (1 - D_sky)^2, multiplied by the window W a. So N
+          is (1 - D_sky)^2 convolved with the window W a (convolve_window),
+          the model up to SIMPLE 25add5b, which used it for every a.
 
         Otherwise the sum costs one 2D FFT of the mesh for each cell of a
         slice. If W is a profile along the LOS times a pattern on the sky,
@@ -470,11 +470,11 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         n_x, n_y, n_z = self.N_mesh
         W = np.broadcast_to(np.asarray(mask_window_function, dtype=float), tuple(self.N_mesh))
         a2 = np.broadcast_to(np.asarray(noise_power, dtype=float), tuple(self.N_mesh))
-        if np.all(W == W[:, :1, :1]):  # only the slice mean of a^2 enters
-            a2 = np.broadcast_to(np.mean(a2, axis=(1, 2), keepdims=True), a2.shape)
+        sky_sq = np.where(self.removed_modes("intensity"), 0.0, self.sky_subtraction_factor()**2)
+        if np.all(W == W[:, :1, :1]):  # W the same in all cells of each slice
+            return np.mean(W**2 * a2) * sky_sq
         if np.all(a2 == a2[:, :1, :1]):  # the convolution with the window W a is exact
-            kept = np.where(self.removed_modes("intensity"), 0.0, self.sky_subtraction_factor()**2)
-            return np.real(self.convolve_window(kept, W * np.sqrt(a2)))
+            return np.real(self.convolve_window(sky_sq, W * np.sqrt(a2)))
         W, a2 = self.los_factors(W, a2)
         logging.info("Sky-subtracted pixel noise: sum over the cells, {} FFTs of {} x {} cells.".format(
             W.shape[0] * n_y * n_z, n_y, n_z))

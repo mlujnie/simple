@@ -269,7 +269,7 @@ class TestSkySubtraction(unittest.TestCase):
         #              mean over the slices of profile^2 sigma^2.
         # los_mask     mask = a profile along the LOS only, sigma changes
         #              from cell to cell: only the mean of sigma^2 over each
-        #              slice enters, and no cell is summed.
+        #              slice matters: mean(W^2 sigma^2) (1 - D_sky)^2.
         # sigma_of_z   3D mask, sigma the same in all cells of each slice:
         #              the convolution, as up to SIMPLE 25add5b.
         for case, slices, old_is_exact in [("3d_mask", 8, False), ("sky_mask", 1, False),
