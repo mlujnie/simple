@@ -378,7 +378,13 @@ class LognormalIntensityMock(BasicBoxCalculator):
         Value of the spectral index :math:`n_s` (part of the cosmology).
 
     lnAs: float
-        Value of :math:`\\mathrm{ln}(10^{10} A_s)` (part of the cosmology).
+        Value of :math:`\\mathrm{ln}(10^{10} A_s)` (part of the cosmology), with :math:`A_s` at the pivot
+        :math:`k = 0.05\\,\\mathrm{Mpc}^{-1}`, as Planck quotes it. It sets the amplitude of the power spectrum
+        that lognormal_galaxies' compute_pk calculates. The mock is made from that power spectrum only if no
+        input_pk_filename is given; input_power_spectrum(k) always returns it.
+        (Until November 2026, SIMPLE 1.0.1 up to commit 25add5b, lnAs was taken at
+        :math:`k = 0.002\\,\\mathrm{Mpc}^{-1}`, the pivot of compute_pk, which made its :math:`P(k)` a factor
+        :math:`(0.002/0.05)^{1-n_s}` smaller for the same value: 0.892 for :math:`n_s = 0.9645`.)
 
     luminosity_function: string or function
         If function, it should take the luminosity as an input (in units of luminosity_unit, but as a float)
@@ -1413,6 +1419,27 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
                 f"Saved instance to file {filename} and {catalog_filename}.")
             return
 
+    def get_lnAs_for_compute_pk(self):
+        """
+        ln(10^10 A_s) at k = 0.002/Mpc, the pivot of lognormal_galaxies'
+        compute_pk, which computes the linear power spectrum from the
+        cosmology (the input of the mock when no input_pk_filename is given,
+        and what input_power_spectrum(k) returns).
+
+        The input lnAs is ln(10^10 A_s) at k = 0.05/Mpc, the pivot at which
+        Planck quotes A_s (Planck Collaboration 2020, A&A 641, A6,
+        Sect. 2.1: "A_s at k = 0.05 Mpc^-1"). The
+        primordial spectrum is A_s (k / k_pivot)^(n_s - 1) (no running), so
+        A_s(0.002/Mpc) = A_s(0.05/Mpc) (0.002 / 0.05)^(n_s - 1).
+
+        Returns
+        -------
+        lnAs: float
+            ln(10^10 A_s) at k = 0.002/Mpc.
+
+        """
+        return self.lnAs + (self.n_s - 1.0) * np.log(0.002 / 0.05)
+
     @functools.cached_property
     def n_bar_gal(self):
         r"""
@@ -1509,7 +1536,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             "oc0h2": self.astropy_cosmo.Odm0 * self.astropy_cosmo.h**2,
             "ob0h2": self.astropy_cosmo.Ob0 * self.astropy_cosmo.h**2,
             "ns": self.n_s,  # 0.9645,
-            "lnAs": self.lnAs,  # 3.094,
+            "lnAs": self.get_lnAs_for_compute_pk(),
             "h0": self.astropy_cosmo.H0 / (100 * u.km / u.s / u.Mpc),
             "w": self.astropy_cosmo.w(self.redshift),
             "run": 0.0,
