@@ -176,6 +176,7 @@ Selection function
 There are two ways of specifying a selection function, which will decide which galaxies are detected or not: specifying ``min_flux`` or ``limit_ngal``.
 If ``limit_ngal`` is given, the required ``min_flux`` will be inferred so that the detected galaxy number density matches the ``limit_ngal`` value.
 Those galaxies that have a higher flux than the ``min_flux`` will be detected.
+The mock has galaxies with luminosities from ``Lmin`` to ``Lmax`` only. A ``min_flux`` below the flux of a galaxy of ``Lmin`` therefore detects all galaxies, and one above the flux of a galaxy of ``Lmax`` none: the expected mean intensity and number density of the detected and undetected galaxies are computed with the luminosity limit :math:`4 \pi D_L^2(z)\,\mathrm{min\_flux}` clipped to [``Lmin``, ``Lmax``].
 
 If neither ``min_flux`` nor ``limit_ngal`` are given, all galaxies are detected.
 

@@ -774,10 +774,13 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                     * np.pi
                     * self.astropy_cosmo.luminosity_distance(redshift) ** 2
                 ).to(self.luminosity_unit).value
+                # for a number or a function of z, the limit clipped to
+                # [Lmin, Lmax], as in mean_intensity_per_redshift (a mesh's
+                # limits are clipped in mean_selected_luminosity_moment)
                 if selection == "detected":
-                    int_L_min = int_L_limit
+                    int_L_min = self.clip_luminosity_limit(int_L_limit)
                 else:
-                    int_L_max = int_L_limit
+                    int_L_max = self.clip_luminosity_limit(int_L_limit)
             if selection in ["detected", "undetected"] and self.min_flux_is_mesh:
                 # mean over the cells of the slice, with the selection_function
                 integral = self.mean_selected_luminosity_moment(int_L_limit, selection, 2)
