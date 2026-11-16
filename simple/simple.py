@@ -1475,6 +1475,33 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             Cached like a property self.n_gal_detected."""
         return (self.N_gal_detected / self.box_volume).to(1 / u.Mpc**3)
 
+    def get_aH(self):
+        """
+        a H(z) at the redshift of the box, in km/s per Mpc/h. lognormal_galaxies
+        multiplies its displacements (in Mpc/h) by aH f(k) to get the
+        velocities (in km/s).
+
+        H(z) comes from the astropy cosmology, at the redshift of the box. It
+        is in km/s/Mpc; dividing by h gives km/s per Mpc/h.
+        assign_redshift_along_axis and assign_single_redshift then move each
+        galaxy along the line of sight by v (1 + z) / H(z), with astropy's
+        H(z) at the galaxy's own redshift (the redshift of the box for a
+        single redshift), which is the generator's displacement times f(k)
+        and aH(box) / aH(galaxy). (Before, aH was
+        100 sqrt(Om0 (1 + z)^3 + Ode0) / (1 + z), which holds for flat
+        LambdaCDM without radiation and massive neutrinos only.) The same aH
+        goes to lognormal_galaxies' calc_pk_const_los_ngp, which divides the
+        velocities by it again.
+
+        Returns
+        -------
+        aH: float
+            a H(z) in km/s/(Mpc/h).
+
+        """
+        H = self.astropy_cosmo.H(self.redshift).to_value(u.km / u.s / u.Mpc)
+        return H / self.astropy_cosmo.h / (1.0 + self.redshift)
+
     def run_lognormal_simulation_cpp(self, output_velocity=0, output_matter=0, output_galidx=1):
         """
         Calculates the power spectrum from input cosmology
@@ -1556,11 +1583,7 @@ Plot plt.loglog(Ls, lim.luminosity_function(Ls)) in a reasonable range to check 
             params["losx"] = 0.0
 
         params["As"] = np.exp(params["lnAs"]) * 1e-10
-        params["aH"] = (
-            100.0
-            * pow(params["om0"] * pow(1.0 + params["z"], 3) + params["ode0"], 0.5)
-            / (1.0 + params["z"])
-        )
+        params["aH"] = self.get_aH()
         # if params['inp_pk_fname'] is blanck,  use Eisenstein & Hu for input pk
         # if params["inp_pk_fname"] is None:
         #    params["inp_pk_fname"] = os.path.join(
