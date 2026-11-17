@@ -359,7 +359,12 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         if self.RSD:
             cell_factor = 1.0
             if self.rsd_cell_factor:
-                cell = self.voxel_length[0].to(self.Mpch).value  # along the LOS
+                voxel = self.voxel_length.to(self.Mpch).value
+                cell = voxel[0]  # along the LOS
+                if not np.allclose(voxel, cell):
+                    logging.warning(
+                        "rsd_cell_factor is derived for cubic voxels; the voxels are "
+                        f"{voxel} Mpc/h. Applying sinc(k_par * {cell:g} Mpc/h).")
                 cell_factor = rsd_cell_factor(np.asarray(self.k_par), cell)
             Pm_kspec = (
                 kaiser_pkmu(
