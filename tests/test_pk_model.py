@@ -3,7 +3,7 @@ import unittest
 import astropy.units as u
 import numpy as np
 
-from simple.pk_3d_model import Power_Spectrum_Model
+from simple.pk_3d_model import Power_Spectrum_Model, rsd_cell_factor
 from simple.simple import LognormalIntensityMock
 from simple.tools_python import yaml_file_to_dictionary
 
@@ -96,3 +96,43 @@ class TestNgalNormalization(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRSDCellFactor(unittest.TestCase):
+    # In redshift space the model is the Kaiser formula with the velocity
+    # term f mu^2 times sinc(k_par * cell), cell the voxel length along the
+    # line of sight: lognormal_galaxies gives every galaxy of a cell the
+    # velocity of that cell, and the galaxies are painted in the nearest cell
+    # of the same grid (see rsd_cell_factor in pk_3d_model.py).
+
+    def model(self, **kwargs):
+        input_dict = yaml_file_to_dictionary("./tests/test_lim_input.yaml")
+        input_dict["f_growth_filename"] = "./tests/input/example_fnu.txt"
+        input_dict["RSD"] = True
+        pk = Power_Spectrum_Model(input_dict, do_model_shot_noise=False, **kwargs)
+        pk.get_kspec()
+        return pk
+
+    def test_factor(self):
+        # sinc(x) = sin(x) / x: 1 at k_par = 0 and 0 at the Nyquist frequency pi / cell
+        k_par = np.array([0.0, 0.1, 0.2, np.pi / 8.0])
+        expected = [1.0, np.sin(0.8) / 0.8, np.sin(1.6) / 1.6, 0.0]
+        np.testing.assert_allclose(rsd_cell_factor(k_par, 8.0), expected, rtol=1e-14, atol=1e-16)
+
+    def test_model_has_the_factor(self):
+        pk = self.model()
+        k, mu, k_par = [np.asarray(x) for x in (pk.kspec, pk.muspec, pk.k_par)]
+        cell = pk.voxel_length[0].to(pk.Mpch).value
+        x = k_par * cell
+        sinc = np.where(x > 0, np.sin(x) / np.where(x > 0, x, 1.0), 1.0)
+        expected = (pk.bias + pk.f_growth(k) * mu**2 * sinc)**2 * pk.Plin(k)
+        np.testing.assert_allclose(pk.Pm_kspec.to(pk.Mpch**3).value, expected, rtol=1e-12)
+        # the factor changes the model: by more than 10 % in some mode
+        kaiser = (pk.bias + pk.f_growth(k) * mu**2)**2 * pk.Plin(k)
+        self.assertGreater(np.max(np.abs(expected / kaiser - 1)), 0.1)
+
+    def test_kaiser_without_the_factor(self):
+        pk = self.model(rsd_cell_factor=False)
+        k, mu = np.asarray(pk.kspec), np.asarray(pk.muspec)
+        expected = (pk.bias + pk.f_growth(k) * mu**2)**2 * pk.Plin(k)
+        np.testing.assert_allclose(pk.Pm_kspec.to(pk.Mpch**3).value, expected, rtol=1e-12)

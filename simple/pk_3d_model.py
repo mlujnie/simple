@@ -17,7 +17,35 @@ from simple.simple import make_map, LognormalIntensityMock
 from simple.tools import get_kspec_cython
 
 
-def kaiser_pkmu(Plin, k, mu, bias, f_growth):
+def rsd_cell_factor(k_par, cell):
+    r"""
+    Returns c = sinc(k_par * cell), sinc(x) = sin(x)/x, which multiplies the
+    velocity term f mu^2 of the Kaiser formula for a catalog of
+    lognormal_galaxies painted on its own grid; cell is the cell size along
+    the line of sight in Mpc/h and k_par is in h/Mpc.
+
+    lognormal_galaxies gives every galaxy of a cell the velocity of that
+    cell, and SIMPLE paints the galaxies in the nearest cell. If the grid of
+    lognormal_galaxies is the mesh, a cell's galaxies fill the cell uniformly,
+    so a shift by s (|s| < cell) along the line of sight moves the fraction
+    |s| / cell of them into the next cell. The part of the painted map that
+    is linear in s is then a centred difference of N s over two cells (N the
+    cell's number of galaxies), [(N s)_{j-1} - (N s)_{j+1}] / (2 cell), where
+    the continuum has the derivative -d(N s)/dx. In Fourier space the
+    derivative is a factor -i k_par and the centred difference
+    -(e^{i k_par cell} - e^{-i k_par cell}) / (2 cell)
+    = -i sin(k_par cell) / cell; their ratio is sinc(k_par cell).
+
+    The factor is exact only for the part linear in s. The steps of the
+    derivation, the part in |s| that it leaves out, and mocks against the
+    model with and without it for cells of 8, 4 and 2 Mpc/h are in simple-jax,
+    docs/rsd.md (https://github.com/mlujnie/simple-jax).
+
+    """
+    return np.sinc(k_par * cell / np.pi)  # np.sinc(x) is sin(pi x) / (pi x)
+
+
+def kaiser_pkmu(Plin, k, mu, bias, f_growth, cell_factor=1.0):
     r"""
     Returns the Kaiser linear P(k,mu) in redshift space
 
@@ -25,10 +53,11 @@ def kaiser_pkmu(Plin, k, mu, bias, f_growth):
 
         P(k,mu) = (1 + f/b_1 \mu^2)^2 b_1^2 P_\mathrm{lin}(k)
 
-    Copied from nbodykit.
+    Copied from nbodykit. The velocity term f mu^2 is multiplied by
+    cell_factor (rsd_cell_factor; 1 gives the Kaiser formula itself).
 
     """
-    return (bias + f_growth(k) * mu**2) ** 2 * Plin(k)
+    return (bias + f_growth(k) * mu**2 * cell_factor) ** 2 * Plin(k)
 
 
 class Power_Spectrum_Model(LognormalIntensityMock):
@@ -46,10 +75,17 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         Default is None/False.
     out_filename: str
         Name of the file to save the model power spectra to (hdf5 format).
+    rsd_cell_factor: bool
+        With RSD: multiply the velocity term f mu^2 of the Kaiser formula by
+        sinc(k_par * cell), cell the voxel length along the LOS, as in the
+        mocks made with lognormal_galaxies (see the function rsd_cell_factor).
+        Default is True. False gives the Kaiser formula itself, e.g. for a
+        catalog with its own velocities.
 
     Notes
     -----
-    The general model is explained in the paper.
+    The general model is explained in the paper. The factor of rsd_cell_factor
+    is not in the paper.
 
     """
 
@@ -60,9 +96,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         out_filename = None,
         galaxy_mask = None,
         intensity_mask = None,
+        rsd_cell_factor = True,
     ):
         LognormalIntensityMock.__init__(self, input_dict=input_dict)
-        self.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask)
+        self.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask, rsd_cell_factor)
 
     @classmethod
     def from_file(
@@ -75,6 +112,7 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         do_model_shot_noise=None,
         galaxy_mask = None,
         intensity_mask = None,
+        rsd_cell_factor = True,
     ):
         """
         Method to initiate a Power_Spectrum_Model object from a file
@@ -95,6 +133,9 @@ class Power_Spectrum_Model(LognormalIntensityMock):
         do_model_shot_noise : bool, optional
             Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
             Default is None/False.
+        rsd_cell_factor : bool, optional
+            With RSD: sinc(k_par * cell) on the velocity term of the Kaiser
+            formula (see the class). Default is True.
 
         Returns
         --------
@@ -108,10 +149,10 @@ class Power_Spectrum_Model(LognormalIntensityMock):
                                      only_params=only_params,
                                      only_meshes=only_meshes,
                                      )
-        instance.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask)
+        instance.own_init(do_model_shot_noise, out_filename, galaxy_mask, intensity_mask, rsd_cell_factor)
         return instance
 
-    def own_init(self, do_model_shot_noise, out_filename, galaxy_mask, intensity_mask):
+    def own_init(self, do_model_shot_noise, out_filename, galaxy_mask, intensity_mask, rsd_cell_factor=True):
         """
         Step in initializing the Power_Spectrum_Model instance.
 
@@ -121,12 +162,16 @@ class Power_Spectrum_Model(LognormalIntensityMock):
             Set to True to model the shot noise by shuffling the galaxy positions perpendicular to the LOS.
         out_filename : str
             Output filename for the power spectrum results.
+        rsd_cell_factor : bool
+            With RSD: sinc(k_par * cell) on the velocity term of the Kaiser
+            formula (see the class).
 
         """
 
         logging.info("Initializing Power_Spectrum_Model instance.")
         self.do_model_shot_noise = do_model_shot_noise
         self.out_filename = out_filename
+        self.rsd_cell_factor = rsd_cell_factor
 
         self.galaxy_mask = galaxy_mask
         self.intensity_mask = intensity_mask
@@ -296,7 +341,11 @@ class Power_Spectrum_Model(LognormalIntensityMock):
     def Pm_kspec(self):
         """
         Cached property that returns the galaxy power spectrum Pm_kspec.
-        If self.RSD is True, it will return the Kaiser RSD approximation.
+        If self.RSD is True, it will return the Kaiser RSD approximation,
+        with sinc(k_par * cell) on its velocity term if self.rsd_cell_factor
+        (cell: the voxel length along the LOS; see the function
+        rsd_cell_factor). That factor holds if the grid of lognormal_galaxies
+        is the mesh, which it is for cubic voxels that divide the box.
         Otherwise it will be just the bias squared times the matter power spectrum.
 
         Returns
@@ -308,9 +357,13 @@ class Power_Spectrum_Model(LognormalIntensityMock):
 
         logging.info("Getting Pm_kspec...")
         if self.RSD:
+            cell_factor = 1.0
+            if self.rsd_cell_factor:
+                cell = self.voxel_length[0].to(self.Mpch).value  # along the LOS
+                cell_factor = rsd_cell_factor(np.asarray(self.k_par), cell)
             Pm_kspec = (
                 kaiser_pkmu(
-                    self.Plin, self.kspec, self.muspec, self.bias, self.f_growth
+                    self.Plin, self.kspec, self.muspec, self.bias, self.f_growth, cell_factor
                 )
                 * self.Mpch**3
             )
